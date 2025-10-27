@@ -1,6 +1,6 @@
 # 🏛️ AI Vault
 
-**Own your data.** Open-source CLI tool for automated archival of AI conversations across multiple platforms.
+**Own your data.** Open-source CLI tool for comprehensive archival of AI interactions—conversations, generated images, videos, code artifacts, and all metadata—across multiple platforms.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -8,15 +8,16 @@
 
 ## 🎯 Mission
 
-Your AI conversations are valuable. They contain your thoughts, research, creative work, and problem-solving. But they live in silos, controlled by different companies, subject to data loss or policy changes.
+Your AI interactions are valuable assets. They contain your thoughts, research, creative work, problem-solving, generated media, and code artifacts. But they live in siloed platforms, controlled by different companies, subject to data loss, policy changes, or account restrictions.
 
-**AI Vault** gives you back control with:
+**AI Vault** gives you back complete control with:
 
 - 🔄 **Automated daily backups** - Set it and forget it
 - 🎯 **Smart targeting** - Archive what matters, skip the noise
 - 📦 **Multi-platform support** - ChatGPT, Claude, Grok, Gemini, and more
-- 🖼️ **Media preservation** - Images, videos, diagrams with deduplication
-- 🏠 **Local-first** - Your data stays on your machine
+- 🖼️ **Complete media preservation** - Images, videos, diagrams, code artifacts with intelligent deduplication
+- 📝 **Full conversation history** - Every message, timestamp, metadata, and context
+- 🏠 **Local-first** - Your data stays on your machine, encrypted and secure
 - 🔌 **Plugin architecture** - Easy to extend with new providers
 
 ## ✨ Features
