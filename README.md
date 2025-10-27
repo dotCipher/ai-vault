@@ -41,20 +41,64 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 - **Automatic Cookie Management** - Extract session cookies from your browser
 - **Filtering & Targeting** - Date ranges, conversation importance, custom queries
 
+## 📦 Installation
+
+### npm / pnpm (All Platforms)
+
+```bash
+# Install globally via npm
+npm install -g ai-vault
+
+# Or via pnpm
+pnpm install -g ai-vault
+
+# Verify installation
+ai-vault --version
+```
+
+### Homebrew (macOS)
+
+```bash
+# Install Node.js and ai-vault
+brew install node@22
+npm install -g ai-vault
+
+# Coming soon: Direct Homebrew installation
+# brew tap dotCipher/ai-vault
+# brew install ai-vault
+```
+
+### From Source (Development)
+
+```bash
+# Clone the repository
+git clone https://github.com/dotCipher/ai-vault.git
+cd ai-vault
+
+# Install dependencies
+pnpm install
+
+# Build the project
+pnpm run build
+
+# Run locally
+pnpm run dev
+```
+
 ## 🚀 Quick Start
 
 ```bash
-# Install dependencies
-npm install
-
 # Interactive setup wizard
-npm run dev setup
+ai-vault setup
 
 # Run your first archive
-npm run dev archive
+ai-vault archive
 
 # Schedule automated backups
-npm run dev schedule
+ai-vault schedule --daily
+
+# List archived conversations
+ai-vault list
 ```
 
 ## 📖 Usage

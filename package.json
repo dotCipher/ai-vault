@@ -1,12 +1,25 @@
 {
   "name": "ai-vault",
   "version": "1.0.0",
-  "description": "Own your data. Open-source CLI tool for automated archival of AI conversations across ChatGPT, Claude, Grok, Gemini, and more.",
+  "description": "Own your data. Open-source CLI tool for comprehensive archival of AI interactions—conversations, images, videos, code artifacts, and metadata—across ChatGPT, Claude, Grok, Gemini, and more.",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
     "ai-vault": "./dist/cli.js"
   },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dotCipher/ai-vault.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dotCipher/ai-vault/issues"
+  },
+  "homepage": "https://github.com/dotCipher/ai-vault#readme",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
@@ -19,6 +32,7 @@
     "test": "echo \"Tests coming soon\" && exit 0",
     "test:watch": "echo \"Tests coming soon\" && exit 0",
     "prepare": "husky",
+    "prepublishOnly": "pnpm run build",
     "release": "semantic-release"
   },
   "keywords": [
