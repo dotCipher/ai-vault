@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/dotCipher/ai-vault/compare/v1.0.0...v1.1.0) (2025-10-27)
+
+### Features
+
+- add package manager distribution support ([aa845bd](https://github.com/dotCipher/ai-vault/commit/aa845bd693d4268805cc054bdfaed3b886bf54b8))
+- streamline multi-platform installation ([2a31e5f](https://github.com/dotCipher/ai-vault/commit/2a31e5fc14a39d7b7d99db7a50ba347a5c152365))
+
 # 1.0.0 (2025-10-27)
 
 ### Bug Fixes
