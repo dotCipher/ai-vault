@@ -20,7 +20,7 @@ npm install -g ai-vault
 pnpm install -g ai-vault
 ```
 
-### Homebrew (macOS) 🚧 Coming Soon
+### Homebrew (macOS) ✅ Automated
 
 **Option 1: Via npm (current)**
 
@@ -29,14 +29,18 @@ brew install node@22
 npm install -g ai-vault
 ```
 
-**Option 2: Native formula (planned)**
+**Option 2: Native formula (coming soon)**
 
 ```bash
 brew tap dotCipher/ai-vault
 brew install ai-vault
 ```
 
-See `homebrew/README.md` for setup instructions.
+**Automation Status:**
+
+- ✅ Formula file automatically updated on each release
+- ✅ Version and SHA256 hash calculated and committed
+- 🚧 Tap repository setup (manual step required once)
 
 ### Other Package Managers (Planned)
 
@@ -67,13 +71,10 @@ When releasing a new version:
    - Semantic-release analyzes commits
    - Bumps version in package.json
    - Creates CHANGELOG.md entry
-   - Publishes to npm registry
+   - Publishes to npm registry (when NPM_TOKEN configured)
    - Creates GitHub release with notes
    - Builds and uploads artifacts
-
-4. 🚧 **Manual Homebrew update** (until automated):
-   - Update `homebrew/ai-vault.rb` with new version and SHA256
-   - Push to homebrew tap repository
+   - **Automatically updates Homebrew formula** with new version and SHA256
 
 ## NPM Publishing Configuration
 

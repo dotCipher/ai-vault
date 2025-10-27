@@ -38,6 +38,37 @@ jobs:
         run: pnpm run build
 
       - name: Release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run release
+
+      - name: Update Homebrew Formula
+        if: steps.semantic.outputs.new_release_published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the new version
+          VERSION="${{ steps.semantic.outputs.new_release_version }}"
+          echo "Updating Homebrew formula to version ${VERSION}"
+
+          # Download the release tarball to calculate SHA256
+          TARBALL_URL="https://github.com/dotCipher/ai-vault/archive/refs/tags/v${VERSION}.tar.gz"
+          curl -L "${TARBALL_URL}" -o /tmp/ai-vault.tar.gz
+
+          # Calculate SHA256
+          SHA256=$(shasum -a 256 /tmp/ai-vault.tar.gz | cut -d' ' -f1)
+          echo "Calculated SHA256: ${SHA256}"
+
+          # Update the formula file
+          sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" homebrew/ai-vault.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" homebrew/ai-vault.rb
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push
+          git add homebrew/ai-vault.rb
+          git commit -m "chore(homebrew): update formula to v${VERSION} [skip ci]"
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/dotCipher/ai-vault.git HEAD:main

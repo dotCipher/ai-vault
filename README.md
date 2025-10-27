@@ -43,46 +43,97 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ## 📦 Installation
 
-### npm / pnpm (All Platforms)
+### Quick Install (All Platforms)
 
 ```bash
-# Install globally via npm
-npm install -g ai-vault
-
-# Or via pnpm
-pnpm install -g ai-vault
-
-# Verify installation
-ai-vault --version
+curl -fsSL https://raw.githubusercontent.com/dotCipher/ai-vault/main/install.sh | bash
 ```
 
-### Homebrew (macOS)
+Or with wget:
 
 ```bash
-# Install Node.js and ai-vault
+wget -qO- https://raw.githubusercontent.com/dotCipher/ai-vault/main/install.sh | bash
+```
+
+### Package Managers
+
+**npm (All Platforms)**
+
+```bash
+npm install -g ai-vault
+```
+
+**pnpm (All Platforms)**
+
+```bash
+pnpm install -g ai-vault
+```
+
+**Homebrew (macOS)**
+
+```bash
 brew install node@22
 npm install -g ai-vault
-
-# Coming soon: Direct Homebrew installation
-# brew tap dotCipher/ai-vault
-# brew install ai-vault
 ```
+
+_Coming soon: Direct Homebrew tap for native installation without Node.js_
 
 ### From Source (Development)
 
 ```bash
-# Clone the repository
 git clone https://github.com/dotCipher/ai-vault.git
 cd ai-vault
+pnpm install && pnpm run build
+```
 
-# Install dependencies
-pnpm install
+### Updating
 
-# Build the project
-pnpm run build
+**npm/pnpm**
 
-# Run locally
-pnpm run dev
+```bash
+npm update -g ai-vault
+# or
+pnpm update -g ai-vault
+```
+
+**Homebrew (once tap is available)**
+
+```bash
+brew upgrade ai-vault
+```
+
+**Check current version**
+
+```bash
+ai-vault --version
+```
+
+### Uninstalling
+
+**npm/pnpm**
+
+```bash
+npm uninstall -g ai-vault
+# or
+pnpm uninstall -g ai-vault
+```
+
+**Homebrew (once tap is available)**
+
+```bash
+brew uninstall ai-vault
+```
+
+**Remove configuration and data** (optional)
+
+```bash
+# macOS/Linux
+rm -rf ~/.config/ai-vault
+rm -rf ~/ai-vault-data
+
+# Windows
+rmdir /s %APPDATA%\ai-vault
+rmdir /s %USERPROFILE%\ai-vault-data
 ```
 
 ## 🚀 Quick Start
