@@ -80,6 +80,12 @@ When releasing a new version:
 
 **Authentication:** Uses `NPM_TOKEN` environment variable (set in GitHub Actions secrets)
 
+**Token Requirements:**
+
+- Granular Access Token with "Read and write" permissions
+- Must allow publishing to all packages or specifically to `ai-vault`
+- No IP restrictions (GitHub Actions uses dynamic IPs)
+
 **Automatic Publishing:**
 
 - Enabled in `.releaserc.json`
