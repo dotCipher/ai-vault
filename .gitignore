@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Vault data
+vault/
+*.vault/
+archives/
+
+# Config (may contain sensitive data)
+config.json
+ai-vault.config.json
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Playwright
+playwright/.cache/
+test-results/
+
+# Cookies & Sessions
+cookies.json
+*.cookies.json
+session.json

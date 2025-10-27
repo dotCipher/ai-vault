@@ -1,0 +1,59 @@
+{
+  "name": "ai-vault",
+  "version": "1.0.0",
+  "description": "Own your data. Open-source CLI tool for automated archival of AI conversations across ChatGPT, Claude, Grok, Gemini, and more.",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "ai-vault": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "archive": "tsx src/cli.ts archive",
+    "setup": "tsx src/cli.ts setup",
+    "schedule": "tsx src/cli.ts schedule",
+    "list": "tsx src/cli.ts list"
+  },
+  "keywords": [
+    "ai",
+    "vault",
+    "data-ownership",
+    "archiver",
+    "backup",
+    "automation",
+    "privacy",
+    "local-first",
+    "chatgpt",
+    "claude",
+    "grok",
+    "gemini",
+    "open-source"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^0.8.2",
+    "axios": "^1.7.9",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.49.1",
+    "chalk": "^5.3.0",
+    "ora": "^8.1.1",
+    "date-fns": "^4.1.0",
+    "zod": "^3.23.8",
+    "node-cron": "^3.0.3",
+    "fast-glob": "^3.3.2",
+    "filenamify": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

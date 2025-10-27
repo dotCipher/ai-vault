@@ -1,0 +1,204 @@
+/**
+ * Reusable web scraping utilities for providers
+ */
+
+import { chromium, type Browser, type Page, type BrowserContext } from 'playwright';
+
+export interface ScraperConfig {
+  headless?: boolean;
+  userAgent?: string;
+  timeout?: number;
+}
+
+export interface CookieConfig {
+  cookies: Record<string, string>;
+  domain: string;
+}
+
+/**
+ * Managed browser instance with authentication support
+ */
+export class BrowserScraper {
+  private browser?: Browser;
+  private config: ScraperConfig;
+
+  constructor(config: ScraperConfig = {}) {
+    this.config = {
+      headless: true,
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      timeout: 30000,
+      ...config,
+    };
+  }
+
+  /**
+   * Initialize browser
+   */
+  async init(): Promise<void> {
+    if (this.browser) return;
+
+    this.browser = await chromium.launch({
+      headless: this.config.headless,
+    });
+  }
+
+  /**
+   * Create authenticated page with cookies
+   */
+  async createPage(cookieConfig?: CookieConfig): Promise<Page> {
+    if (!this.browser) {
+      await this.init();
+    }
+
+    const context = await this.browser!.newContext({
+      userAgent: this.config.userAgent,
+    });
+
+    if (cookieConfig) {
+      await context.addCookies(
+        Object.entries(cookieConfig.cookies).map(([name, value]) => ({
+          name,
+          value,
+          domain: cookieConfig.domain,
+          path: '/',
+        }))
+      );
+    }
+
+    return context.newPage();
+  }
+
+  /**
+   * Cleanup browser
+   */
+  async close(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = undefined;
+    }
+  }
+}
+
+/**
+ * Auto-scroll page to load dynamic content
+ */
+export async function autoScroll(page: Page, options: {
+  maxScrolls?: number;
+  distance?: number;
+  delay?: number;
+} = {}): Promise<void> {
+  const { maxScrolls = 50, distance = 100, delay = 100 } = options;
+
+  await page.evaluate(
+    async ({ distance, maxScrolls, delay }) => {
+      await new Promise<void>((resolve) => {
+        let totalHeight = 0;
+        let scrolls = 0;
+
+        const timer = setInterval(() => {
+          const scrollHeight = document.documentElement.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+          scrolls++;
+
+          if (totalHeight >= scrollHeight || scrolls >= maxScrolls) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, delay);
+      });
+    },
+    { distance, maxScrolls, delay }
+  );
+}
+
+/**
+ * Wait for any selector from a list
+ */
+export async function waitForAnySelector(
+  page: Page,
+  selectors: string[],
+  timeout = 10000
+): Promise<string | null> {
+  try {
+    const selector = selectors.join(', ');
+    await page.waitForSelector(selector, { timeout });
+
+    // Find which selector matched
+    for (const sel of selectors) {
+      const element = await page.$(sel);
+      if (element) {
+        return sel;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Extract text from element with multiple selector fallbacks
+ */
+export async function extractText(
+  page: Page,
+  selectors: string[],
+  defaultValue = ''
+): Promise<string> {
+  for (const selector of selectors) {
+    const element = await page.$(selector);
+    if (element) {
+      const text = await element.textContent();
+      if (text?.trim()) {
+        return text.trim();
+      }
+    }
+  }
+  return defaultValue;
+}
+
+/**
+ * Extract attribute from element with multiple selector fallbacks
+ */
+export async function extractAttribute(
+  page: Page,
+  selectors: string[],
+  attribute: string,
+  defaultValue = ''
+): Promise<string> {
+  for (const selector of selectors) {
+    const element = await page.$(selector);
+    if (element) {
+      const value = await element.getAttribute(attribute);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return defaultValue;
+}
+
+/**
+ * Extract list of items with dynamic selectors
+ */
+export async function extractList<T>(
+  page: Page,
+  containerSelectors: string[],
+  extractor: (element: any) => T
+): Promise<T[]> {
+  for (const selector of containerSelectors) {
+    const elements = await page.$$(selector);
+    if (elements.length > 0) {
+      return page.evaluate(
+        ({ selector, extractor }) => {
+          const items = Array.from(document.querySelectorAll(selector));
+          return items.map((item) => extractor(item));
+        },
+        { selector, extractor }
+      );
+    }
+  }
+  return [];
+}
