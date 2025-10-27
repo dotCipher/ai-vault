@@ -87,19 +87,14 @@ export class GrokProvider extends BaseProvider {
       domain: '.x.com',
     });
 
-    try {
-      await page.goto('https://x.com/i/grok', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto('https://x.com/i/grok', { waitUntil: 'networkidle', timeout: 30000 });
 
-      // Check if we're redirected to login
-      const url = page.url();
-      const isAuthenticated = !url.includes('/login') && !url.includes('/oauth');
+    // Check if we're redirected to login
+    const url = page.url();
+    const isAuthenticated = !url.includes('/login') && !url.includes('/oauth');
 
-      await page.close();
-      return isAuthenticated;
-    } catch (error) {
-      await page.close();
-      return false;
-    }
+    await page.close();
+    return isAuthenticated;
   }
 
   /**
@@ -123,7 +118,7 @@ export class GrokProvider extends BaseProvider {
    * List conversations via web scraping
    */
   private async listConversationsViaScraping(
-    options?: ListConversationsOptions
+    _options?: ListConversationsOptions
   ): Promise<ConversationSummary[]> {
     const page = await this.scraper!.createPage({
       cookies: this.config!.cookies!,

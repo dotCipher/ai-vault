@@ -1,6 +1,7 @@
 import eslint from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
+import globals from 'globals';
 
 export default [
   eslint.configs.recommended,
@@ -13,6 +14,10 @@ export default [
         sourceType: 'module',
         project: './tsconfig.json',
       },
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
     },
     plugins: {
       '@typescript-eslint': tseslint,
@@ -23,6 +28,7 @@ export default [
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       'no-console': 'off',
+      'no-useless-catch': 'off',
     },
   },
   {

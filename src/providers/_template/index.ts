@@ -36,12 +36,8 @@ export class TemplateProvider extends BaseProvider {
       });
 
       // Test authentication
-      try {
-        await this.client!.get('/auth/verify');
-        return true;
-      } catch (error) {
-        throw new AuthenticationError('Invalid API key');
-      }
+      await this.client!.get('/auth/verify');
+      return true;
     }
 
     // Example: Cookie authentication

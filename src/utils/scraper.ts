@@ -2,7 +2,7 @@
  * Reusable web scraping utilities for providers
  */
 
-import { chromium, type Browser, type Page, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type Page } from 'playwright';
 
 export interface ScraperConfig {
   headless?: boolean;
