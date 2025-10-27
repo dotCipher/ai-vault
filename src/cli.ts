@@ -11,7 +11,9 @@ const program = new Command();
 
 program
   .name('ai-vault')
-  .description('Own your data. Archive AI conversations across multiple platforms.')
+  .description(
+    'Own your data. Comprehensive archival of AI interactions—conversations, images, videos, code artifacts, and metadata—across multiple platforms.'
+  )
   .version('1.0.0');
 
 program

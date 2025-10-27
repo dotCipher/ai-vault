@@ -61,7 +61,7 @@ echo ""
 echo ""
 echo "Installing ai-vault globally..."
 echo ""
-if npm install -g ai-vault; then
+if NODE_NO_WARNINGS=1 npm install -g ai-vault --loglevel=error --no-fund; then
     echo ""
     echo -e "${GREEN}✓ AI Vault installed successfully!${NC}"
     echo ""
