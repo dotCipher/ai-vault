@@ -66,7 +66,6 @@ export class GrokProvider extends BaseProvider {
     throw new AuthenticationError(`Unsupported auth method: ${config.authMethod}`);
   }
 
-
   /**
    * Check if currently authenticated
    */
@@ -135,11 +134,13 @@ export class GrokProvider extends BaseProvider {
       await page.goto('https://x.com/i/grok', { waitUntil: 'networkidle', timeout: 30000 });
 
       // Wait for conversations list to load
-      await page.waitForSelector('[data-testid="conversation-item"], .conversation-list-item', {
-        timeout: 10000,
-      }).catch(() => {
-        // Try alternative selectors if standard ones don't work
-      });
+      await page
+        .waitForSelector('[data-testid="conversation-item"], .conversation-list-item', {
+          timeout: 10000,
+        })
+        .catch(() => {
+          // Try alternative selectors if standard ones don't work
+        });
 
       // Scroll to load more conversations
       await autoScroll(page);
@@ -147,20 +148,27 @@ export class GrokProvider extends BaseProvider {
       // Extract conversation data
       const conversations = await page.evaluate(() => {
         const items = Array.from(
-          document.querySelectorAll('[data-testid="conversation-item"], .conversation-list-item, [data-conversation-id]')
+          document.querySelectorAll(
+            '[data-testid="conversation-item"], .conversation-list-item, [data-conversation-id]'
+          )
         ) as Element[];
 
-        return items.map((item: Element) => {
-          const id = item.getAttribute('data-conversation-id') || item.getAttribute('data-id') || '';
-          const titleEl = item.querySelector('.conversation-title, [data-testid="conversation-title"]');
-          const title = titleEl?.textContent?.trim() || 'Untitled';
-          const previewEl = item.querySelector('.conversation-preview, .message-preview');
-          const preview = previewEl?.textContent?.trim();
-          const timeEl = item.querySelector('time, .timestamp');
-          const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent || '';
+        return items
+          .map((item: Element) => {
+            const id =
+              item.getAttribute('data-conversation-id') || item.getAttribute('data-id') || '';
+            const titleEl = item.querySelector(
+              '.conversation-title, [data-testid="conversation-title"]'
+            );
+            const title = titleEl?.textContent?.trim() || 'Untitled';
+            const previewEl = item.querySelector('.conversation-preview, .message-preview');
+            const preview = previewEl?.textContent?.trim();
+            const timeEl = item.querySelector('time, .timestamp');
+            const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent || '';
 
-          return { id, title, preview, timestamp };
-        }).filter((item: any) => item.id); // Only keep items with IDs
+            return { id, title, preview, timestamp };
+          })
+          .filter((item: any) => item.id); // Only keep items with IDs
       });
 
       await page.close();
@@ -180,7 +188,6 @@ export class GrokProvider extends BaseProvider {
       throw new Error(`Failed to list conversations: ${error}`);
     }
   }
-
 
   /**
    * Fetch complete conversation
@@ -230,8 +237,9 @@ export class GrokProvider extends BaseProvider {
 
         const messages = messageEls.map((el: Element, idx: number) => {
           const roleEl = el.querySelector('.message-role, [data-role]');
-          const role = roleEl?.getAttribute('data-role') ||
-                       (el.classList.contains('user-message') ? 'user' : 'assistant');
+          const role =
+            roleEl?.getAttribute('data-role') ||
+            (el.classList.contains('user-message') ? 'user' : 'assistant');
 
           const contentEl = el.querySelector('.message-content, .message-text');
           const content = contentEl?.textContent?.trim() || '';
@@ -267,11 +275,13 @@ export class GrokProvider extends BaseProvider {
         role: msg.role,
         content: msg.content,
         timestamp: new Date(msg.timestamp),
-        attachments: msg.attachments?.map((att): Attachment => ({
-          id: att.id,
-          type: att.type,
-          url: att.url,
-        })),
+        attachments: msg.attachments?.map(
+          (att): Attachment => ({
+            id: att.id,
+            type: att.type,
+            url: att.url,
+          })
+        ),
       }));
 
       return {

@@ -11,6 +11,7 @@
 Your AI conversations are valuable. They contain your thoughts, research, creative work, and problem-solving. But they live in silos, controlled by different companies, subject to data loss or policy changes.
 
 **AI Vault** gives you back control with:
+
 - 🔄 **Automated daily backups** - Set it and forget it
 - 🎯 **Smart targeting** - Archive what matters, skip the noise
 - 📦 **Multi-platform support** - ChatGPT, Claude, Grok, Gemini, and more
@@ -22,13 +23,13 @@ Your AI conversations are valuable. They contain your thoughts, research, creati
 
 ### Supported Platforms
 
-| Platform | Status | API Support | Web Scraping | Media Download |
-|----------|--------|-------------|--------------|----------------|
-| **Grok (X.AI)** | 🚧 In Progress | ✅ | ✅ | ✅ |
-| **ChatGPT** | 📋 Planned | ✅ | ✅ | ✅ |
-| **Claude** | 📋 Planned | ✅ | ✅ | ✅ |
-| **Gemini** | 📋 Planned | ⚠️ Partial | ✅ | ✅ |
-| **Perplexity** | 📋 Planned | ❌ | ✅ | ✅ |
+| Platform        | Status         | API Support | Web Scraping | Media Download |
+| --------------- | -------------- | ----------- | ------------ | -------------- |
+| **Grok (X.AI)** | 🚧 In Progress | ✅          | ✅           | ✅             |
+| **ChatGPT**     | 📋 Planned     | ✅          | ✅           | ✅             |
+| **Claude**      | 📋 Planned     | ✅          | ✅           | ✅             |
+| **Gemini**      | 📋 Planned     | ⚠️ Partial  | ✅           | ✅             |
+| **Perplexity**  | 📋 Planned     | ❌          | ✅           | ✅             |
 
 ### Smart Features
 
@@ -64,6 +65,7 @@ ai-vault setup
 ```
 
 The interactive wizard will:
+
 1. Choose which AI platforms to archive
 2. Configure authentication (API keys or browser cookies)
 3. Set your backup preferences
@@ -136,6 +138,7 @@ See [ARCHITECTURE.md](docs/architecture.md) for details.
 ## 🤝 Contributing
 
 We welcome contributions! Whether you want to:
+
 - Add support for a new AI platform
 - Improve existing providers
 - Add features or fix bugs
@@ -177,6 +180,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## 🙏 Acknowledgments
 
 Built with:
+
 - [Playwright](https://playwright.dev/) - Web automation
 - [Commander.js](https://github.com/tj/commander.js) - CLI framework
 - [Clack](https://github.com/natemoo-re/clack) - Interactive prompts

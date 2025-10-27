@@ -2,13 +2,7 @@
  * Provider interface - all AI platform providers must implement this
  */
 
-import type {
-  ProviderName,
-  ProviderConfig,
-  Conversation,
-  Message,
-  ArchiveOptions,
-} from './index';
+import type { ProviderName, ProviderConfig, Conversation, Message, ArchiveOptions } from './index';
 
 export interface ListConversationsOptions {
   since?: Date;

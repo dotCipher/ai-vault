@@ -27,15 +27,19 @@ export const MessageSchema = z.object({
   content: z.string(),
   timestamp: z.coerce.date(),
   metadata: z.record(z.any()).optional(),
-  attachments: z.array(z.object({
-    id: z.string(),
-    type: z.enum(['image', 'video', 'audio', 'document', 'code']),
-    url: z.string(),
-    localPath: z.string().optional(),
-    mimeType: z.string().optional(),
-    size: z.number().optional(),
-    metadata: z.record(z.any()).optional(),
-  })).optional(),
+  attachments: z
+    .array(
+      z.object({
+        id: z.string(),
+        type: z.enum(['image', 'video', 'audio', 'document', 'code']),
+        url: z.string(),
+        localPath: z.string().optional(),
+        mimeType: z.string().optional(),
+        size: z.number().optional(),
+        metadata: z.record(z.any()).optional(),
+      })
+    )
+    .optional(),
 });
 
 export const ConversationSchema = z.object({
@@ -45,15 +49,17 @@ export const ConversationSchema = z.object({
   messages: z.array(MessageSchema),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    archived: z.boolean().optional(),
-    starred: z.boolean().optional(),
-    folder: z.string().optional(),
-    messageCount: z.number(),
-    characterCount: z.number(),
-    mediaCount: z.number(),
-  }).passthrough(),
+  metadata: z
+    .object({
+      tags: z.array(z.string()).optional(),
+      archived: z.boolean().optional(),
+      starred: z.boolean().optional(),
+      folder: z.string().optional(),
+      messageCount: z.number(),
+      characterCount: z.number(),
+      mediaCount: z.number(),
+    })
+    .passthrough(),
 });
 
 // ========== Config Schemas ==========
@@ -103,13 +109,15 @@ export const ArchiveOptionsSchema = z.object({
   until: z.coerce.date().optional(),
   includeMedia: z.boolean().optional(),
   outputFormat: z.array(z.enum(['json', 'markdown', 'html', 'txt'])).optional(),
-  filter: z.object({
-    starred: z.boolean().optional(),
-    archived: z.boolean().optional(),
-    minMessages: z.number().optional(),
-    maxMessages: z.number().optional(),
-    searchQuery: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-  }).optional(),
+  filter: z
+    .object({
+      starred: z.boolean().optional(),
+      archived: z.boolean().optional(),
+      minMessages: z.number().optional(),
+      maxMessages: z.number().optional(),
+      searchQuery: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+    })
+    .optional(),
   dryRun: z.boolean().optional(),
 });

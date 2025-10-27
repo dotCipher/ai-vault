@@ -144,6 +144,7 @@ npm test
 ### 6. Document
 
 Add documentation:
+
 - Update `README.md` platform support table
 - Create `docs/providers/yourplatform.md` with:
   - Authentication methods
@@ -206,6 +207,7 @@ We love feature ideas! Please:
 ## 🔐 Security
 
 **Do NOT** commit:
+
 - API keys or tokens
 - Cookies or session data
 - Personal conversation archives
@@ -235,6 +237,7 @@ Fixes #123
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 Examples:
+
 - `feat(grok): add support for image generation history`
 - `fix(storage): handle corrupted JSON files gracefully`
 - `docs(providers): add Claude setup guide`
@@ -242,6 +245,7 @@ Examples:
 ## 🎉 Recognition
 
 Contributors will be:
+
 - Listed in README.md
 - Credited in release notes
 - Given credit in relevant documentation

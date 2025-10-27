@@ -1,0 +1,79 @@
+version: '3'
+
+vars:
+  PKG_MANAGER: pnpm
+
+tasks:
+  install:
+    desc: Install dependencies
+    cmds:
+      - '{{.PKG_MANAGER}} install'
+
+  build:
+    desc: Build the project
+    deps: [clean]
+    cmds:
+      - '{{.PKG_MANAGER}} run build'
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf dist
+      - rm -rf *.tsbuildinfo
+
+  dev:
+    desc: Run in development mode
+    cmds:
+      - '{{.PKG_MANAGER}} run dev {{.CLI_ARGS}}'
+
+  lint:
+    desc: Lint the codebase
+    cmds:
+      - '{{.PKG_MANAGER}} run lint'
+
+  format:
+    desc: Format the codebase
+    cmds:
+      - '{{.PKG_MANAGER}} run format'
+
+  format:check:
+    desc: Check code formatting
+    cmds:
+      - '{{.PKG_MANAGER}} run format:check'
+
+  test:
+    desc: Run tests
+    cmds:
+      - '{{.PKG_MANAGER}} run test'
+
+  test:watch:
+    desc: Run tests in watch mode
+    cmds:
+      - '{{.PKG_MANAGER}} run test:watch'
+
+  typecheck:
+    desc: Run TypeScript type checking
+    cmds:
+      - '{{.PKG_MANAGER}} run typecheck'
+
+  ci:
+    desc: Run all CI checks
+    deps: [typecheck, lint, format:check, test, build]
+    cmds:
+      - echo "✅ All CI checks passed!"
+
+  release:
+    desc: Create a release
+    cmds:
+      - '{{.PKG_MANAGER}} run release'
+
+  playground:
+    desc: Open Playwright browser for testing
+    cmds:
+      - '{{.PKG_MANAGER}} exec playwright open'
+
+  setup:
+    desc: Initial project setup
+    cmds:
+      - task: install
+      - '{{.PKG_MANAGER}} exec playwright install chromium'

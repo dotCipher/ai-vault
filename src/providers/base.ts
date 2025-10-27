@@ -96,11 +96,7 @@ export abstract class BaseProvider implements Provider {
   /**
    * Helper for exponential backoff retry
    */
-  protected async retry<T>(
-    fn: () => Promise<T>,
-    maxRetries = 3,
-    baseDelay = 1000
-  ): Promise<T> {
+  protected async retry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
     let lastError: Error;
 
     for (let i = 0; i < maxRetries; i++) {

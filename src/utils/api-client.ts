@@ -117,11 +117,7 @@ export class ApiClient {
   /**
    * Retry with exponential backoff
    */
-  private async retry<T>(
-    fn: () => Promise<T>,
-    maxRetries = 3,
-    baseDelay = 1000
-  ): Promise<T> {
+  private async retry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
     let lastError: Error;
 
     for (let i = 0; i < maxRetries; i++) {

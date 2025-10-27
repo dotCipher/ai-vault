@@ -15,9 +15,9 @@ import type { ListConversationsOptions, ConversationSummary } from '../../types/
 import { AuthenticationError, NotFoundError } from '../../types/provider';
 
 export class TemplateProvider extends BaseProvider {
-  readonly name = 'grok' as any;  // Change to your provider name (must match ProviderName type)
-  readonly displayName = 'Template Provider';  // Human-readable name
-  readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['api-key', 'cookies'];  // Supported auth methods
+  readonly name = 'grok' as any; // Change to your provider name (must match ProviderName type)
+  readonly displayName = 'Template Provider'; // Human-readable name
+  readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['api-key', 'cookies']; // Supported auth methods
 
   /**
    * Authenticate with the provider

@@ -83,11 +83,14 @@ export class BrowserScraper {
 /**
  * Auto-scroll page to load dynamic content
  */
-export async function autoScroll(page: Page, options: {
-  maxScrolls?: number;
-  distance?: number;
-  delay?: number;
-} = {}): Promise<void> {
+export async function autoScroll(
+  page: Page,
+  options: {
+    maxScrolls?: number;
+    distance?: number;
+    delay?: number;
+  } = {}
+): Promise<void> {
   const { maxScrolls = 50, distance = 100, delay = 100 } = options;
 
   await page.evaluate(
