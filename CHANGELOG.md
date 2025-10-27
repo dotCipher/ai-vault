@@ -1,3 +1,9 @@
+# [1.3.0](https://github.com/dotCipher/ai-vault/compare/v1.2.2...v1.3.0) (2025-10-27)
+
+### Features
+
+- add self-upgrade command and multiple version flags ([d4d9baf](https://github.com/dotCipher/ai-vault/commit/d4d9bafebce1d30ba75c1d4191f22513467eba47))
+
 ## [1.2.2](https://github.com/dotCipher/ai-vault/compare/v1.2.1...v1.2.2) (2025-10-27)
 
 ### Bug Fixes
