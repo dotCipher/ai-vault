@@ -37,19 +37,29 @@ jobs:
       - name: Build project
         run: pnpm run build
 
+      - name: Get version before release
+        id: version_before
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Release
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run release
 
+      - name: Get version after release
+        id: version_after
+        run: |
+          git pull origin main
+          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Update Homebrew Formula
-        if: steps.semantic.outputs.new_release_published == 'true'
+        if: steps.version_before.outputs.version != steps.version_after.outputs.version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Get the new version
-          VERSION="${{ steps.semantic.outputs.new_release_version }}"
+          VERSION="${{ steps.version_after.outputs.version }}"
           echo "Updating Homebrew formula to version ${VERSION}"
 
           # Download the release tarball to calculate SHA256
