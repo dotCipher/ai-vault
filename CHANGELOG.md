@@ -1,3 +1,13 @@
+# [1.2.0](https://github.com/dotCipher/ai-vault/compare/v1.1.1...v1.2.0) (2025-10-27)
+
+### Bug Fixes
+
+- add NPM_TOKEN to release workflow environment ([7430b70](https://github.com/dotCipher/ai-vault/commit/7430b70fe0da9e9024aa3a6cbf6d0c4a92dee6e3))
+
+### Features
+
+- enable npm package publishing ([80e2d9c](https://github.com/dotCipher/ai-vault/commit/80e2d9cf5616023bf2d3c81649b8ac410eea0da6))
+
 ## [1.1.1](https://github.com/dotCipher/ai-vault/compare/v1.1.0...v1.1.1) (2025-10-27)
 
 ### Bug Fixes

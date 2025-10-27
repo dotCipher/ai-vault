@@ -1,6 +1,6 @@
 {
   "name": "ai-vault",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Own your data. Open-source CLI tool for comprehensive archival of AI interactions—conversations, images, videos, code artifacts, and metadata—across ChatGPT, Claude, Grok, Gemini, and more.",
   "main": "dist/index.js",
   "type": "module",
