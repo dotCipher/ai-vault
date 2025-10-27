@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/dotCipher/ai-vault/compare/v1.1.0...v1.1.1) (2025-10-27)
+
+### Bug Fixes
+
+- improve Homebrew formula automation reliability ([a30c3bd](https://github.com/dotCipher/ai-vault/commit/a30c3bd78f26dcbc7e08c3ec8721603081c5a37e))
+
 # [1.1.0](https://github.com/dotCipher/ai-vault/compare/v1.0.0...v1.1.0) (2025-10-27)
 
 ### Features
