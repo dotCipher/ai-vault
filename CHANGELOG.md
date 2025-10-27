@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/dotCipher/ai-vault/compare/v1.2.0...v1.2.1) (2025-10-27)
+
+### Bug Fixes
+
+- improve install script output formatting ([ddfe0dc](https://github.com/dotCipher/ai-vault/commit/ddfe0dc34319d150ff8ba08eb7242ec5de55cfad))
+
 # [1.2.0](https://github.com/dotCipher/ai-vault/compare/v1.1.1...v1.2.0) (2025-10-27)
 
 ### Bug Fixes
