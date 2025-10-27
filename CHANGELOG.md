@@ -1,3 +1,9 @@
+## [1.2.2](https://github.com/dotCipher/ai-vault/compare/v1.2.1...v1.2.2) (2025-10-27)
+
+### Bug Fixes
+
+- update CLI description and suppress install warnings ([b010056](https://github.com/dotCipher/ai-vault/commit/b010056061a4d35c7fbea9af65c2b53d0ee91df7))
+
 ## [1.2.1](https://github.com/dotCipher/ai-vault/compare/v1.2.0...v1.2.1) (2025-10-27)
 
 ### Bug Fixes
