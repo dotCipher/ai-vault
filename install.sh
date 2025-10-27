@@ -58,7 +58,9 @@ echo -e "${GREEN}✓${NC} npm found"
 echo ""
 
 # Install ai-vault
+echo ""
 echo "Installing ai-vault globally..."
+echo ""
 if npm install -g ai-vault; then
     echo ""
     echo -e "${GREEN}✓ AI Vault installed successfully!${NC}"
