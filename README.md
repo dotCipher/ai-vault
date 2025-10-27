@@ -88,7 +88,18 @@ pnpm install && pnpm run build
 
 ### Updating
 
-**npm/pnpm**
+**Built-in upgrade command (recommended)**
+
+```bash
+ai-vault upgrade
+# or
+ai-vault update
+
+# Skip confirmation prompt
+ai-vault upgrade --yes
+```
+
+**Manual update**
 
 ```bash
 npm update -g ai-vault
@@ -106,6 +117,8 @@ brew upgrade ai-vault
 
 ```bash
 ai-vault --version
+# or
+ai-vault -v
 ```
 
 ### Uninstalling
@@ -150,6 +163,9 @@ ai-vault schedule --daily
 
 # List archived conversations
 ai-vault list
+
+# Check for updates
+ai-vault upgrade
 ```
 
 ## 📖 Usage
