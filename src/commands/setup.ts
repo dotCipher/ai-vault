@@ -29,8 +29,9 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   const provider = await clack.select({
     message: 'Which provider do you want to configure?',
     options: [
-      { value: 'grok', label: 'Grok (X.AI)', hint: 'grok.x.ai' },
-      { value: 'chatgpt', label: 'ChatGPT (OpenAI)', hint: 'chat.openai.com' },
+      { value: 'grok-web', label: 'Grok (grok.com)', hint: 'grok.com' },
+      { value: 'grok-x', label: 'Grok on X (x.com)', hint: 'x.com/grok' },
+      { value: 'chatgpt', label: 'ChatGPT (OpenAI)', hint: 'chatgpt.com' },
       { value: 'claude', label: 'Claude (Anthropic)', hint: 'claude.ai' },
     ],
   });
@@ -40,16 +41,19 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     process.exit(0);
   }
 
-  // Currently only Grok is implemented
-  if (provider !== 'grok') {
-    clack.log.error(`${provider} provider is not yet implemented`);
+  // Check which provider to configure
+  const providerName = provider as string;
+
+  // Check if not yet implemented
+  if (providerName === 'claude') {
+    clack.log.error(`${providerName} provider is not yet implemented`);
     process.exit(1);
   }
 
   // Check if already configured
-  if (await isProviderConfigured('grok')) {
+  if (await isProviderConfigured(providerName)) {
     const overwrite = await clack.confirm({
-      message: 'Grok is already configured. Overwrite?',
+      message: `${providerName} is already configured. Overwrite?`,
     });
 
     if (clack.isCancel(overwrite) || !overwrite) {
@@ -58,14 +62,26 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     }
   }
 
-  // Configure Grok
-  await setupGrok(options);
+  // Configure based on provider
+  switch (providerName) {
+    case 'grok-web':
+    case 'grok-x':
+      await setupGrok(providerName, options);
+      break;
+    case 'chatgpt':
+      await setupChatGPT(options);
+      break;
+    default:
+      clack.log.error(`${providerName} provider is not yet implemented`);
+      process.exit(1);
+  }
 
   clack.outro(chalk.green('✓ Setup complete! Run `ai-vault archive` to start archiving.'));
 }
 
-async function setupGrok(options: SetupOptions): Promise<void> {
-  clack.log.step('Configuring Grok (X.AI)');
+async function setupGrok(providerName: string, options: SetupOptions): Promise<void> {
+  const displayName = providerName === 'grok-web' ? 'Grok (grok.com)' : 'Grok on X (x.com/grok)';
+  clack.log.step(`Configuring ${displayName}`);
 
   // If cookies file provided, skip to cookie auth
   let authMethod: string;
@@ -118,7 +134,7 @@ async function setupGrok(options: SetupOptions): Promise<void> {
     }
 
     providerConfig = {
-      providerName: 'grok',
+      providerName: providerName as any,
       authMethod: 'api-key',
       apiKey: apiKey as string,
       ...(customEndpoint && { customEndpoint: customEndpoint as string }),
@@ -150,10 +166,11 @@ async function setupGrok(options: SetupOptions): Promise<void> {
       }
     } else {
       // Interactive prompt for each cookie
-      clack.log.info('To get cookies from Grok:');
-      clack.log.info('1. Open grok.com in your browser and log in');
+      const websiteUrl = providerName === 'grok-web' ? 'grok.com' : 'x.com/grok';
+      clack.log.info(`To get cookies from ${displayName}:`);
+      clack.log.info(`1. Open ${websiteUrl} in your browser and log in`);
       clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
-      clack.log.info('3. Go to Application → Cookies → https://grok.com');
+      clack.log.info(`3. Go to Application → Cookies → https://${websiteUrl.split('/')[0]}`);
       clack.log.info('4. Find each cookie below and copy its VALUE');
       console.log();
 
@@ -215,11 +232,134 @@ async function setupGrok(options: SetupOptions): Promise<void> {
     }
 
     providerConfig = {
-      providerName: 'grok',
+      providerName: providerName as any,
       authMethod: 'cookies',
       cookies,
     };
   }
+
+  // Test authentication
+  const spinner = clack.spinner();
+  spinner.start('Testing authentication...');
+
+  try {
+    const provider = getProvider(providerConfig.providerName as any);
+    await provider.authenticate(providerConfig);
+    const isAuth = await provider.isAuthenticated();
+    await provider.cleanup?.();
+
+    if (!isAuth) {
+      spinner.stop('Authentication failed');
+      clack.log.error('Could not authenticate with provided credentials');
+      process.exit(1);
+    }
+
+    spinner.stop('✓ Authentication successful!');
+  } catch (error) {
+    spinner.stop('Authentication failed');
+    clack.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    process.exit(1);
+  }
+
+  // Save configuration
+  await saveProviderConfig(providerConfig);
+  clack.log.success('Configuration saved to ~/.ai-vault/config.json');
+
+  // Configure archive directory
+  const config = await loadConfig();
+  if (!config.settings?.archiveDir) {
+    console.log();
+    const customDir = await clack.text({
+      message: 'Archive directory (press Enter for default):',
+      placeholder: '~/ai-vault-data',
+    });
+
+    if (!clack.isCancel(customDir) && customDir) {
+      config.settings = config.settings || {};
+      config.settings.archiveDir = customDir as string;
+      const { saveConfig } = await import('../utils/config.js');
+      await saveConfig(config);
+      clack.log.info(`Archive directory set to: ${customDir}`);
+    }
+  }
+}
+
+async function setupChatGPT(options: SetupOptions): Promise<void> {
+  clack.log.step('Configuring ChatGPT (OpenAI)');
+
+  let cookies: Record<string, string>;
+
+  // Read from file if provided
+  if (options.cookiesFile) {
+    try {
+      const filePath = resolve(options.cookiesFile);
+      const fileContent = readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(fileContent);
+
+      if (Array.isArray(parsed)) {
+        // Convert array format to object format
+        cookies = Object.fromEntries(parsed.map((cookie: any) => [cookie.name, cookie.value]));
+      } else {
+        // Already in object format
+        cookies = parsed;
+      }
+
+      clack.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
+    } catch (error) {
+      clack.log.error(
+        `Failed to read cookies file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      process.exit(1);
+    }
+  } else {
+    // Interactive prompt for each cookie
+    clack.log.info('To get cookies from ChatGPT:');
+    clack.log.info('1. Open chatgpt.com in your browser and log in');
+    clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
+    clack.log.info('3. Go to Application → Cookies → https://chatgpt.com');
+    clack.log.info('4. Find the cookie below and copy its VALUE');
+    console.log();
+
+    // Define required cookies for ChatGPT
+    const requiredCookies = [
+      {
+        name: '__Secure-next-auth.session-token',
+        description: 'Session token',
+        hint: 'Long token string',
+      },
+    ];
+
+    cookies = {};
+
+    // Prompt for each cookie
+    for (const cookieInfo of requiredCookies) {
+      const value = await clack.text({
+        message: `Enter value for cookie "${cookieInfo.name}" (${cookieInfo.description}):`,
+        placeholder: cookieInfo.hint,
+        validate: (val) => {
+          if (!val || val.trim().length === 0) {
+            return `${cookieInfo.name} is required`;
+          }
+          return undefined;
+        },
+      });
+
+      if (clack.isCancel(value)) {
+        clack.cancel('Setup cancelled');
+        process.exit(0);
+      }
+
+      cookies[cookieInfo.name] = (value as string).trim();
+    }
+
+    clack.log.success('Cookie collected successfully!');
+  }
+
+  const providerConfig: ProviderConfig = {
+    providerName: 'chatgpt',
+    authMethod: 'cookies',
+    cookies,
+  };
 
   // Test authentication
   const spinner = clack.spinner();
