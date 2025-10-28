@@ -24,20 +24,27 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ### Supported Platforms
 
-| Platform        | Status         | API Support | Web Scraping | Media Download |
-| --------------- | -------------- | ----------- | ------------ | -------------- |
-| **Grok (X.AI)** | 🚧 In Progress | ✅          | ✅           | ✅             |
-| **ChatGPT**     | 📋 Planned     | ✅          | ✅           | ✅             |
-| **Claude**      | 📋 Planned     | ✅          | ✅           | ✅             |
-| **Gemini**      | 📋 Planned     | ⚠️ Partial  | ✅           | ✅             |
-| **Perplexity**  | 📋 Planned     | ❌          | ✅           | ✅             |
+| Platform            | Status         | API Support | Web Scraping | Media Download |
+| ------------------- | -------------- | ----------- | ------------ | -------------- |
+| **Grok (grok.com)** | 🚧 In Progress | ❌          | ✅           | ✅             |
+| **Grok on X**       | 🚧 In Progress | ❌          | ✅           | ✅             |
+| **ChatGPT**         | 📋 Planned     | ✅          | ✅           | ✅             |
+| **Claude**          | 📋 Planned     | ✅          | ✅           | ✅             |
+| **Gemini**          | 📋 Planned     | ⚠️ Partial  | ✅           | ✅             |
+| **Perplexity**      | 📋 Planned     | ❌          | ✅           | ✅             |
+
+**Note:** Grok has two separate providers due to separate account systems:
+
+- `grok-web`: Standalone grok.com platform (cookies authentication)
+- `grok-x`: X-integrated Grok at x.com/grok (cookies authentication)
 
 ### Smart Features
 
+- **Native Import Support** - Import from official platform exports (Grok, ChatGPT, Claude)
 - **Incremental Backups** - Only fetch new/updated conversations
 - **Media Deduplication** - Don't store the same image twice
 - **Flexible Scheduling** - Daily, weekly, or custom cron expressions
-- **Rich Export Formats** - JSON, Markdown, HTML with metadata
+- **Rich Export Formats** - JSON + Markdown for maximum compatibility
 - **Automatic Cookie Management** - Extract session cookies from your browser
 - **Filtering & Targeting** - Date ranges, conversation importance, custom queries
 
@@ -155,7 +162,10 @@ rmdir /s %USERPROFILE%\ai-vault-data
 # Interactive setup wizard
 ai-vault setup
 
-# Run your first archive
+# Option 1: Import from native export (fastest way to start)
+ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
+
+# Option 2: Archive via automated scraping
 ai-vault archive
 
 # Schedule automated backups
@@ -173,15 +183,27 @@ ai-vault upgrade
 ### Setup
 
 ```bash
+# Interactive setup
 ai-vault setup
+
+# Setup with cookies from file (easier for cookie-based auth)
+ai-vault setup --cookies-file ~/Downloads/cookies.json
 ```
+
+**For cookie-based authentication:**
+
+1. Install [Cookie-Editor](https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) extension
+2. Go to the provider's website and log in (e.g., grok.com)
+3. Click Cookie-Editor → Export → JSON
+4. Save to a file
+5. Run `ai-vault setup --cookies-file <path>`
 
 The interactive wizard will:
 
 1. Choose which AI platforms to archive
 2. Configure authentication (API keys or browser cookies)
-3. Set your backup preferences
-4. Choose export formats
+3. Set your archive directory (default: `~/ai-vault-data`)
+4. Test your connection
 
 ### Archive Now
 
@@ -190,14 +212,52 @@ The interactive wizard will:
 ai-vault archive
 
 # Archive specific platform
-ai-vault archive --provider grok
+ai-vault archive --provider grok-web
 
 # Archive with date filter
 ai-vault archive --since 2025-01-01
 
+# Archive with custom output directory
+ai-vault archive --output ~/Dropbox/AI-Backups
+ai-vault archive -o /mnt/external/backups
+
+# Limit number of conversations
+ai-vault archive --limit 10
+
+# Skip media downloads (faster, text only)
+ai-vault archive --skip-media
+
 # Dry run (see what would be archived)
 ai-vault archive --dry-run
 ```
+
+### Import from Native Exports
+
+Many platforms offer one-time data exports. AI Vault can import these and convert to its standardized format:
+
+```bash
+# Import from Grok's native export
+ai-vault import --provider grok-web --file ~/Downloads/grok-export/
+
+# Import with custom output directory
+ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --output ~/Dropbox/AI-Backups
+
+# Skip confirmation prompt
+ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
+```
+
+**Supported import formats:**
+
+- **Grok**: Export from grok.com → Profile → Data & Privacy → Download your data
+- **ChatGPT**: _(coming soon)_ Export from settings → Data controls → Export data
+- **Claude**: _(coming soon)_ Export from settings
+
+**Why import vs scraping?**
+
+- ✅ Faster - no web automation needed
+- ✅ More reliable - uses official export format
+- ✅ Complete data - includes metadata that might not be visible in UI
+- ✅ Works alongside automated scraping for incremental updates
 
 ### Schedule Automated Backups
 
@@ -225,6 +285,95 @@ ai-vault list --provider chatgpt
 ai-vault list --search "machine learning"
 ```
 
+## ⚙️ Configuration
+
+### File Locations
+
+**Configuration file:** `~/.ai-vault/config.json`
+
+```json
+{
+  "version": "1.0.0",
+  "providers": {
+    "grok-web": {
+      "providerName": "grok-web",
+      "authMethod": "cookies",
+      "cookies": {
+        "auth_token": "your-session-cookie"
+      }
+    }
+  },
+  "settings": {
+    "archiveDir": "~/ai-vault-data"
+  }
+}
+```
+
+**Default archive directory:** `~/ai-vault-data`
+
+```
+~/ai-vault-data/
+├── grok-web/          # Standalone grok.com conversations
+│   ├── conversations/
+│   │   └── conv-123/
+│   │       ├── conversation.json
+│   │       └── conversation.md
+│   ├── media/
+│   │   ├── images/
+│   │   ├── videos/
+│   │   └── documents/
+│   ├── index.json
+│   └── media-registry.json
+├── grok-x/            # X-integrated Grok conversations
+│   └── ... (same structure)
+├── chatgpt/
+└── claude/
+```
+
+### Customizing Archive Directory
+
+**Three ways to set the output directory** (in priority order):
+
+1. **CLI option** (per-command override):
+
+   ```bash
+   ai-vault archive --output ~/Dropbox/AI-Backups
+   ai-vault archive -o /mnt/external/backups
+   ```
+
+2. **Config file** (persistent setting):
+   Manually edit `~/.ai-vault/config.json`:
+
+   ```json
+   {
+     "settings": {
+       "archiveDir": "~/Documents/my-ai-archives"
+     }
+   }
+   ```
+
+   Or set during `ai-vault setup`
+
+3. **Default**: `~/ai-vault-data` (if nothing configured)
+
+### Export Format
+
+Conversations are saved in **Markdown** by default:
+
+- Human-readable and portable
+- Works with Obsidian, Notion, VS Code, and any text editor
+- Includes full conversation text + metadata
+
+To change the format, edit `~/.ai-vault/config.json`:
+
+```json
+{
+  "settings": {
+    "formats": ["markdown"] // Options: "markdown", "json", or both ["markdown", "json"]
+  }
+}
+```
+
 ## 🏗️ Architecture
 
 AI Vault uses a **plugin-based provider architecture** that makes it easy to add new AI platforms:
@@ -233,7 +382,8 @@ AI Vault uses a **plugin-based provider architecture** that makes it easy to add
 src/
 ├── providers/          # Pluggable AI platform providers
 │   ├── base.ts        # Abstract Provider interface
-│   ├── grok/          # Grok (X.AI) implementation
+│   ├── grok-web/      # Grok (grok.com) implementation
+│   ├── grok-x/        # Grok on X (x.com/grok) implementation
 │   ├── chatgpt/       # ChatGPT implementation
 │   └── claude/        # Claude implementation
 ├── core/              # Core archival logic
@@ -273,10 +423,12 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 ## 📋 Roadmap
 
 - [x] Project setup and architecture
-- [ ] Grok provider (API + scraping)
-- [ ] ChatGPT provider
-- [ ] Claude provider
-- [ ] Media downloader with deduplication
+- [x] Native import support (Grok ✓, ChatGPT & Claude coming soon)
+- [x] Storage layer with JSON + Markdown export
+- [x] Media downloader with SHA256 deduplication
+- [ ] Grok provider (API + scraping) - in progress
+- [ ] ChatGPT provider (import + scraping)
+- [ ] Claude provider (import + scraping)
 - [ ] Smart filtering system
 - [ ] Scheduling with cron/launchd
 - [ ] Gemini provider

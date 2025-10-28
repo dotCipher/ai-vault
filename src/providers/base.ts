@@ -7,8 +7,8 @@ import type {
   ListConversationsOptions,
   ConversationSummary,
   MediaDownloadResult,
-} from '../types/provider';
-import type { ProviderName, ProviderConfig, Conversation } from '../types';
+} from '../types/provider.js';
+import type { ProviderName, ProviderConfig, Conversation } from '../types/index.js';
 import axios, { AxiosInstance } from 'axios';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';

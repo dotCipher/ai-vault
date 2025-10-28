@@ -27,30 +27,60 @@ program
 program
   .command('setup')
   .description('Interactive setup wizard')
-  .action(async () => {
-    console.log(chalk.blue('Setup wizard coming soon!'));
-    console.log(chalk.gray('This will help you configure providers and authentication.'));
+  .option('--cookies-file <path>', 'Path to cookies JSON file (for cookie-based auth)')
+  .action(async (options) => {
+    const { setupCommand } = await import('./commands/setup.js');
+    await setupCommand(options);
   });
 
 program
   .command('archive')
   .description('Archive conversations from configured providers')
   .option('-p, --provider <provider>', 'Specific provider to archive')
-  .option('--since <date>', 'Archive conversations since date')
+  .option('-o, --output <directory>', 'Output directory (overrides config)')
+  .option('--since <date>', 'Archive conversations since date (YYYY-MM-DD)')
+  .option('--until <date>', 'Archive conversations until date (YYYY-MM-DD)')
+  .option('--limit <number>', 'Maximum number of conversations to archive')
   .option('--dry-run', 'Preview what would be archived without downloading')
+  .option('--skip-media', 'Skip downloading media files (images, videos)')
+  .option('--ids <ids...>', 'Specific conversation IDs to archive')
   .action(async (options) => {
-    console.log(chalk.blue('Archive command coming soon!'));
-    console.log(chalk.gray('Options:'), options);
+    const { archiveCommand } = await import('./commands/archive.js');
+    await archiveCommand({
+      provider: options.provider,
+      outputDir: options.output,
+      since: options.since,
+      until: options.until,
+      limit: options.limit,
+      dryRun: options.dryRun,
+      skipMedia: options.skipMedia,
+      conversationIds: options.ids,
+    });
+  });
+
+program
+  .command('import')
+  .description('Import conversations from native platform exports')
+  .requiredOption('-p, --provider <provider>', 'Provider (grok, chatgpt, claude, etc.)')
+  .requiredOption('-f, --file <path>', 'Path to export file or directory')
+  .option('-o, --output <directory>', 'Output directory (overrides config)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (options) => {
+    const { importCommand } = await import('./commands/import.js');
+    await importCommand(options);
   });
 
 program
   .command('list')
-  .description('List archived conversations')
-  .option('-p, --provider <provider>', 'Filter by provider')
-  .option('--search <query>', 'Search conversations')
+  .description('List conversations from configured providers')
+  .option('-p, --provider <provider>', 'Provider to list from (grok-web, grok-x, etc.)')
+  .option('--search <query>', 'Search conversations by title or preview')
+  .option('--since <date>', 'List conversations since date (YYYY-MM-DD)')
+  .option('--until <date>', 'List conversations until date (YYYY-MM-DD)')
+  .option('--limit <number>', 'Maximum number of conversations to list')
   .action(async (options) => {
-    console.log(chalk.blue('List command coming soon!'));
-    console.log(chalk.gray('Options:'), options);
+    const { listCommand } = await import('./commands/list.js');
+    await listCommand(options);
   });
 
 program
