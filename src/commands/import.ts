@@ -6,27 +6,89 @@ import * as clack from '@clack/prompts';
 import chalk from 'chalk';
 import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { resolve, join } from 'path';
+import path from 'path';
 import { loadConfig } from '../utils/config.js';
 import { createArchiver } from '../core/archiver.js';
 import type { Conversation, Message } from '../types/index.js';
 
 interface ImportOptions {
-  provider: string;
+  provider?: string;
   file: string;
   output?: string;
   yes?: boolean;
 }
 
+/**
+ * Auto-detect provider from export file structure
+ */
+async function detectProvider(filePath: string): Promise<string | null> {
+  const stat = statSync(filePath);
+
+  if (stat.isDirectory()) {
+    const files = readdirSync(filePath);
+
+    // ChatGPT: has conversations.json
+    if (files.includes('conversations.json')) {
+      return 'chatgpt';
+    }
+
+    // Grok: has files with 'grok-backend' or 'prod-grok-backend'
+    if (files.some((f) => f.includes('grok-backend') || f.includes('prod-grok-backend'))) {
+      return 'grok-web';
+    }
+  } else {
+    // Single file - check filename and structure
+    const filename = path.basename(filePath);
+
+    if (filename === 'conversations.json') {
+      // Peek inside to check structure
+      try {
+        const content = readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(content);
+        const first = Array.isArray(data) ? data[0] : data;
+
+        // ChatGPT has 'mapping' field
+        if (first && first.mapping) {
+          return 'chatgpt';
+        }
+
+        // Grok has 'conversations' and 'responses' arrays
+        if (first && first.conversations) {
+          return 'grok-web';
+        }
+      } catch {
+        // Invalid JSON, can't detect
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function importCommand(options: ImportOptions): Promise<void> {
   clack.intro(chalk.bold.blue('AI Vault Import'));
 
-  const { provider, file } = options;
+  const { file } = options;
 
   // Validate file exists
   const filePath = resolve(file);
   if (!existsSync(filePath)) {
     clack.log.error(`File or directory not found: ${filePath}`);
     process.exit(1);
+  }
+
+  // Auto-detect provider if not specified
+  let provider = options.provider;
+  if (!provider) {
+    const detected = await detectProvider(filePath);
+    if (!detected) {
+      clack.log.error('Could not auto-detect provider from export format.');
+      clack.log.info('Please specify the provider with --provider flag');
+      clack.log.info('Supported providers: grok, grok-web, chatgpt');
+      process.exit(1);
+    }
+    provider = detected;
+    clack.log.success(`Auto-detected provider: ${provider}`);
   }
 
   // Load config for output directory
@@ -78,6 +140,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
 
   // Save conversations using archiver
   const archiver = createArchiver(archiveDir);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const storage = (archiver as any).storage; // Access storage from archiver
 
   const spinner = clack.spinner();
@@ -156,6 +219,7 @@ async function importGrok(
     const responses = item.responses || [];
 
     // Convert responses to messages
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const messages: Message[] = responses.map((r: any) => {
       const response = r.response;
       return {
@@ -248,6 +312,7 @@ async function importChatGPT(
     const mapping = conv.mapping || {};
 
     // Build message tree from mapping
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const messageNodes: any[] = [];
     for (const nodeId in mapping) {
       const node = mapping[nodeId];
