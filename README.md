@@ -459,20 +459,42 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 
 ## 📋 Roadmap
 
+### Completed ✅
+
 - [x] Project setup and architecture
-- [x] Native import support (Grok ✓, ChatGPT & Claude coming soon)
 - [x] Storage layer with JSON + Markdown export
 - [x] Media downloader with SHA256 deduplication
-- [ ] Grok provider (API + scraping) - in progress
-- [ ] ChatGPT provider (import + scraping)
-- [ ] Claude provider (import + scraping)
-- [ ] Smart filtering system
-- [ ] Scheduling with cron/launchd
-- [ ] Gemini provider
-- [ ] Perplexity provider
-- [ ] Export to knowledge management tools (Obsidian, Notion)
-- [ ] Search across all archived conversations
-- [ ] Web UI for browsing archives
+- [x] Native import support (Grok ✓, ChatGPT & Claude coming soon)
+- [x] Grok provider - two separate implementations:
+  - [x] **grok-web**: Standalone grok.com (cookies + scraping)
+  - [x] **grok-x**: X-integrated Grok at x.com/grok (cookies + scraping)
+- [x] Smart filtering system:
+  - [x] Date range filtering (since/until)
+  - [x] Search query filtering (title/preview)
+  - [x] Conversation limit controls
+  - [x] List command for browsing before archiving
+- [x] Scheduling system:
+  - [x] Platform-agnostic (cron on Unix, Task Scheduler on Windows)
+  - [x] Full CRUD operations (add, list, remove, enable, disable)
+  - [x] Per-provider schedule configuration
+  - [x] Logging infrastructure
+
+### In Progress 🚧
+
+- [ ] Additional provider implementations:
+  - [ ] ChatGPT provider (import + API + scraping)
+  - [ ] Claude provider (import + API + scraping)
+  - [ ] Gemini provider (API + scraping)
+  - [ ] Perplexity provider (scraping)
+
+### Planned 📋
+
+- [ ] Export to knowledge management tools (Obsidian, Notion, Roam)
+- [ ] Full-text search across all archived conversations
+- [ ] Web UI for browsing and exploring archives
+- [ ] Conversation analytics and insights
+- [ ] Automatic tagging and categorization
+- [ ] Differential sync (only download changes)
 
 ## 📄 License
 
