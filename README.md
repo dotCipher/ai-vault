@@ -24,14 +24,14 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ### Supported Platforms
 
-| Platform            | Status         | API Support | Web Scraping | Media Download |
-| ------------------- | -------------- | ----------- | ------------ | -------------- |
-| **Grok (grok.com)** | 🚧 In Progress | ❌          | ✅           | ✅             |
-| **Grok on X**       | 🚧 In Progress | ❌          | ✅           | ✅             |
-| **ChatGPT**         | 📋 Planned     | ✅          | ✅           | ✅             |
-| **Claude**          | 📋 Planned     | ✅          | ✅           | ✅             |
-| **Gemini**          | 📋 Planned     | ⚠️ Partial  | ✅           | ✅             |
-| **Perplexity**      | 📋 Planned     | ❌          | ✅           | ✅             |
+| Platform            | Status         | Native Import | Web Scraping | Media Download |
+| ------------------- | -------------- | ------------- | ------------ | -------------- |
+| **Grok (grok.com)** | ✅ Complete    | ✅            | ✅           | ✅             |
+| **Grok on X**       | ✅ Complete    | ❌            | ✅           | ✅             |
+| **ChatGPT**         | 🚧 In Progress | ✅            | ✅           | ✅             |
+| **Claude**          | 📋 Planned     | ✅            | ✅           | ✅             |
+| **Gemini**          | 📋 Planned     | ✅            | ✅           | ✅             |
+| **Perplexity**      | 📋 Planned     | ❌            | ✅           | ✅             |
 
 **Note:** Grok has two separate providers due to separate account systems:
 
@@ -482,10 +482,12 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 ### In Progress 🚧
 
 - [ ] Additional provider implementations:
-  - [ ] ChatGPT provider (import + API + scraping)
-  - [ ] Claude provider (import + API + scraping)
-  - [ ] Gemini provider (API + scraping)
+  - [ ] ChatGPT provider (import + scraping)
+  - [ ] Claude provider (import + scraping)
+  - [ ] Gemini provider (import + scraping)
   - [ ] Perplexity provider (scraping)
+
+**Note:** API support refers to native import from official platform exports, not API-based conversation retrieval (which most platforms don't provide).
 
 ### Planned 📋
 
