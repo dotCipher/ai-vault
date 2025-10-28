@@ -62,6 +62,8 @@ export class BrowserScraper {
           value,
           domain: cookieConfig.domain,
           path: '/',
+          // Cookies with __Secure- or __Host- prefix must have secure flag
+          secure: name.startsWith('__Secure-') || name.startsWith('__Host-'),
         }))
       );
     }

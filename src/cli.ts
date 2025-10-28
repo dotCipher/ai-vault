@@ -61,7 +61,10 @@ program
 program
   .command('import')
   .description('Import conversations from native platform exports')
-  .requiredOption('-p, --provider <provider>', 'Provider (grok, chatgpt, claude, etc.)')
+  .option(
+    '-p, --provider <provider>',
+    'Provider (grok, chatgpt, claude) - auto-detected if omitted'
+  )
   .requiredOption('-f, --file <path>', 'Path to export file or directory')
   .option('-o, --output <directory>', 'Output directory (overrides config)')
   .option('-y, --yes', 'Skip confirmation prompt')
