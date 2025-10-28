@@ -49,11 +49,15 @@ export async function importCommand(options: ImportOptions): Promise<void> {
 
   switch (provider.toLowerCase()) {
     case 'grok':
+    case 'grok-web':
       ({ conversations } = await importGrok(filePath));
+      break;
+    case 'chatgpt':
+      ({ conversations } = await importChatGPT(filePath));
       break;
     default:
       clack.log.error(`Import not yet supported for provider: ${provider}`);
-      clack.log.info('Supported providers: grok');
+      clack.log.info('Supported providers: grok, grok-web, chatgpt');
       process.exit(1);
   }
 
@@ -198,4 +202,113 @@ async function importGrok(
   spinner.stop(`✓ Parsed ${conversations.length} conversations`);
 
   return { conversations, mediaDir };
+}
+
+/**
+ * Import from ChatGPT's native export format
+ */
+async function importChatGPT(
+  filePath: string
+): Promise<{ conversations: Conversation[]; mediaDir?: string }> {
+  const spinner = clack.spinner();
+  spinner.start('Reading ChatGPT export...');
+
+  const stat = statSync(filePath);
+  let jsonFile: string;
+
+  if (stat.isDirectory()) {
+    // Export is a directory - find conversations.json
+    const files = readdirSync(filePath);
+    const conversationsJson = files.find((f) => f === 'conversations.json');
+
+    if (!conversationsJson) {
+      spinner.stop('Failed');
+      throw new Error('Could not find conversations.json in export directory');
+    }
+
+    jsonFile = join(filePath, conversationsJson);
+  } else {
+    // Single JSON file
+    jsonFile = filePath;
+  }
+
+  spinner.message('Parsing conversations...');
+
+  const content = readFileSync(jsonFile, 'utf-8');
+  const data = JSON.parse(content);
+
+  // data is an array of conversation objects
+  const conversationsList = Array.isArray(data) ? data : [data];
+  const conversations: Conversation[] = [];
+
+  for (const conv of conversationsList) {
+    const messages: Message[] = [];
+
+    // The mapping contains message nodes
+    const mapping = conv.mapping || {};
+
+    // Build message tree from mapping
+    const messageNodes: any[] = [];
+    for (const nodeId in mapping) {
+      const node = mapping[nodeId];
+      if (node.message && node.message.content && node.message.content.parts) {
+        messageNodes.push(node);
+      }
+    }
+
+    // Sort by create_time
+    messageNodes.sort((a, b) => {
+      const timeA = a.message.create_time || 0;
+      const timeB = b.message.create_time || 0;
+      return timeA - timeB;
+    });
+
+    // Convert to standard message format
+    for (const node of messageNodes) {
+      const msg = node.message;
+      const role = msg.author.role;
+
+      // Skip system messages
+      if (role === 'system') continue;
+
+      const content = Array.isArray(msg.content.parts)
+        ? msg.content.parts.join('\\n')
+        : String(msg.content.parts || '');
+
+      if (!content.trim()) continue;
+
+      messages.push({
+        id: msg.id,
+        role: role === 'user' ? 'user' : 'assistant',
+        content,
+        timestamp: new Date((msg.create_time || Date.now() / 1000) * 1000),
+        metadata: {
+          model: msg.metadata?.model_slug,
+        },
+      });
+    }
+
+    // Skip conversations with no messages
+    if (messages.length === 0) continue;
+
+    const conversation: Conversation = {
+      id: conv.id,
+      provider: 'chatgpt',
+      title: conv.title || 'Untitled',
+      messages,
+      createdAt: new Date(conv.create_time * 1000),
+      updatedAt: new Date(conv.update_time * 1000),
+      metadata: {
+        messageCount: messages.length,
+        characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
+        mediaCount: 0, // TODO: Extract media from content
+      },
+    };
+
+    conversations.push(conversation);
+  }
+
+  spinner.stop(`✓ Parsed ${conversations.length} conversations`);
+
+  return { conversations };
 }
