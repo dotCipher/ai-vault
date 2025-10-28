@@ -1,3 +1,9 @@
+# [1.5.0](https://github.com/dotCipher/ai-vault/compare/v1.4.0...v1.5.0) (2025-10-28)
+
+### Features
+
+- ChatGPT provider implementation with ZIP import and media support ([#2](https://github.com/dotCipher/ai-vault/issues/2)) ([f935221](https://github.com/dotCipher/ai-vault/commit/f93522100fa2a50f1eff2844e676965b837b5b7a))
+
 # [1.4.0](https://github.com/dotCipher/ai-vault/compare/v1.3.0...v1.4.0) (2025-10-28)
 
 ### Features
