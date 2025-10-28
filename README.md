@@ -24,14 +24,14 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ### Supported Platforms
 
-| Platform            | Status         | Native Import | Web Scraping | Media Download |
-| ------------------- | -------------- | ------------- | ------------ | -------------- |
-| **Grok (grok.com)** | ✅ Complete    | ✅            | ✅           | ✅             |
-| **Grok on X**       | ✅ Complete    | ❌            | ✅           | ✅             |
-| **ChatGPT**         | 🚧 In Progress | ✅            | ✅           | ✅             |
-| **Claude**          | 📋 Planned     | ✅            | ✅           | ✅             |
-| **Gemini**          | 📋 Planned     | ✅            | ✅           | ✅             |
-| **Perplexity**      | 📋 Planned     | ❌            | ✅           | ✅             |
+| Platform            | Status      | Native Import | Web Scraping | Media Download |
+| ------------------- | ----------- | ------------- | ------------ | -------------- |
+| **Grok (grok.com)** | ✅ Complete | ✅            | ✅           | ✅             |
+| **Grok on X**       | ✅ Complete | ❌            | ✅           | ✅             |
+| **ChatGPT**         | ✅ Complete | ✅            | ✅           | ✅             |
+| **Claude**          | 📋 Planned  | ✅            | ✅           | ✅             |
+| **Gemini**          | 📋 Planned  | ✅            | ✅           | ✅             |
+| **Perplexity**      | 📋 Planned  | ❌            | ✅           | ✅             |
 
 **Note:** Grok has two separate providers due to separate account systems:
 
@@ -41,6 +41,9 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 ### Smart Features
 
 - **Native Import Support** - Import from official platform exports (Grok, ChatGPT, Claude)
+- **ZIP Import** - Import directly from ZIP files or unpacked directories
+- **Auto-Detection** - Automatically detects provider from export format
+- **Complete Media Preservation** - Imports images, DALL-E generations, audio, video files
 - **Incremental Backups** - Only fetch new/updated conversations
 - **Media Deduplication** - Don't store the same image twice
 - **Flexible Scheduling** - Daily, weekly, or custom cron expressions
@@ -239,30 +242,41 @@ ai-vault archive --dry-run
 Many platforms offer one-time data exports. AI Vault can import these and convert to its standardized format:
 
 ```bash
-# Import from Grok's native export
-ai-vault import --provider grok-web --file ~/Downloads/grok-export/
+# Auto-detect provider from export (recommended)
+ai-vault import --file ~/Downloads/chatgpt-export.zip --yes
+
+# Import from unpacked directory
+ai-vault import --file ~/Downloads/grok-export/
 
 # Import with custom output directory
-ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --output ~/Dropbox/AI-Backups
+ai-vault import --file ~/Downloads/export.zip --output ~/Dropbox/AI-Backups
+
+# Manually specify provider (optional)
+ai-vault import --provider grok-web --file ~/Downloads/grok-export/
 
 # Skip confirmation prompt
-ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
+ai-vault import --file ~/Downloads/export.zip --yes
 ```
 
 **Supported import formats:**
 
+- **ChatGPT**: Export from settings → Data controls → Export data
+  - Supports ZIP files and unpacked directories
+  - Automatically imports all media (images, DALL-E generations, audio)
+  - Provider auto-detected from `conversations.json`
 - **Grok (grok.com)**: Export from grok.com → Profile → Data & Privacy → Download your data
   - Use `--provider grok-web` for standalone Grok conversations
+  - Supports ZIP files and unpacked directories
 - **Grok on X**: Export from x.com/grok (if available)
   - Use `--provider grok-x` for X-integrated Grok conversations
-- **ChatGPT**: _(coming soon)_ Export from settings → Data controls → Export data
 - **Claude**: _(coming soon)_ Export from settings
 
 **Why import vs scraping?**
 
 - ✅ Faster - no web automation needed
 - ✅ More reliable - uses official export format
-- ✅ Complete data - includes metadata that might not be visible in UI
+- ✅ Complete data - includes all metadata and media files
+- ✅ Works with ZIP files or unpacked directories
 - ✅ Works alongside automated scraping for incremental updates
 
 ### Schedule Automated Backups
@@ -464,10 +478,19 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 - [x] Project setup and architecture
 - [x] Storage layer with JSON + Markdown export
 - [x] Media downloader with SHA256 deduplication
-- [x] Native import support (Grok ✓, ChatGPT & Claude coming soon)
+- [x] ZIP import support - Import directly from ZIP files or unpacked directories
+- [x] Provider auto-detection from export file structure
+- [x] Complete media preservation (images, DALL-E generations, audio, video)
+- [x] Native import support:
+  - [x] **Grok**: Import from official grok.com exports with media
+  - [x] **ChatGPT**: Import from official OpenAI exports with media
 - [x] Grok provider - two separate implementations:
   - [x] **grok-web**: Standalone grok.com (cookies + scraping)
   - [x] **grok-x**: X-integrated Grok at x.com/grok (cookies + scraping)
+- [x] ChatGPT provider:
+  - [x] **Native import**: From conversations.json exports
+  - [x] **Web scraping**: Cookie-based authentication
+  - [x] **Media import**: Images, DALL-E generations, audio files
 - [x] Smart filtering system:
   - [x] Date range filtering (since/until)
   - [x] Search query filtering (title/preview)
@@ -482,7 +505,6 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 ### In Progress 🚧
 
 - [ ] Additional provider implementations:
-  - [ ] ChatGPT provider (import + scraping)
   - [ ] Claude provider (import + scraping)
   - [ ] Gemini provider (import + scraping)
   - [ ] Perplexity provider (scraping)
