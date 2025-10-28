@@ -29,9 +29,12 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"*.md\" \"*.json\" \"*.yml\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"*.md\" \"*.json\" \"*.yml\"",
-    "test": "echo \"Tests coming soon\" && exit 0",
-    "test:watch": "echo \"Tests coming soon\" && exit 0",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
     "prepare": "husky",
+    "postinstall": "playwright install chromium --with-deps || echo 'Note: Run pnpm exec playwright install chromium if browser installation failed'",
     "prepublishOnly": "pnpm run build",
     "release": "semantic-release"
   },
@@ -74,16 +77,21 @@
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.10.2",
     "@types/node-cron": "^3.0.11",
+    "@types/sinon": "^17.0.4",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
+    "@vitest/coverage-v8": "^4.0.4",
+    "@vitest/ui": "^4.0.4",
     "eslint": "^9.38.0",
     "globals": "^16.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "prettier": "^3.6.2",
     "semantic-release": "^25.0.1",
+    "sinon": "^21.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.4"
   },
   "engines": {
     "node": ">=18.0.0"

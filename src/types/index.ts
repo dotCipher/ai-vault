@@ -4,17 +4,26 @@
 
 // ========== Provider Types ==========
 
-export type ProviderName = 'grok' | 'chatgpt' | 'claude' | 'gemini' | 'perplexity';
+export type ProviderName = 'grok-web' | 'grok-x' | 'chatgpt' | 'claude' | 'gemini' | 'perplexity';
 
 export type AuthMethod = 'api-key' | 'cookies' | 'oauth';
 
 export interface ProviderConfig {
-  name: ProviderName;
-  enabled: boolean;
+  providerName: string; // Allow any string for extensibility
   authMethod: AuthMethod;
   apiKey?: string;
   cookies?: Record<string, string>;
   customEndpoint?: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  messageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  hasMedia: boolean;
+  preview?: string;
 }
 
 // ========== Conversation Types ==========
@@ -59,7 +68,7 @@ export interface Attachment {
 
 export interface Conversation {
   id: string;
-  provider: ProviderName;
+  provider: string; // Provider name (extensible)
   title: string;
   messages: Message[];
   createdAt: Date;

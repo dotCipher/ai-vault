@@ -2,13 +2,15 @@
  * Provider registry - all AI platform providers
  */
 
-import { GrokProvider } from './grok';
-import type { Provider } from '../types/provider';
-import type { ProviderName } from '../types';
+import { GrokWebProvider } from './grok-web/index.js';
+import { GrokXProvider } from './grok-x/index.js';
+import type { Provider } from '../types/provider.js';
+import type { ProviderName } from '../types/index.js';
 
 // Provider registry
 export const providers: Record<string, new () => Provider> = {
-  grok: GrokProvider,
+  'grok-web': GrokWebProvider,
+  'grok-x': GrokXProvider,
   // chatgpt: ChatGPTProvider, // Coming soon
   // claude: ClaudeProvider, // Coming soon
   // gemini: GeminiProvider, // Coming soon
@@ -43,4 +45,4 @@ export function isProviderAvailable(name: string): boolean {
   return name in providers;
 }
 
-export { GrokProvider };
+export { GrokWebProvider, GrokXProvider };

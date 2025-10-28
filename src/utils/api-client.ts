@@ -3,7 +3,7 @@
  */
 
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
-import { AuthenticationError, RateLimitError } from '../types/provider';
+import { AuthenticationError, RateLimitError } from '../types/provider.js';
 
 export interface ApiClientConfig {
   baseURL: string;

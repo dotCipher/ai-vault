@@ -2,7 +2,7 @@
  * Provider interface - all AI platform providers must implement this
  */
 
-import type { ProviderName, ProviderConfig, Conversation } from './index';
+import type { ProviderConfig, Conversation } from './index';
 
 export interface ListConversationsOptions {
   since?: Date;
@@ -14,7 +14,7 @@ export interface ListConversationsOptions {
 
 export interface Provider {
   /** Unique provider identifier */
-  readonly name: ProviderName;
+  readonly name: string;
 
   /** Human-readable display name */
   readonly displayName: string;
@@ -65,6 +65,11 @@ export interface Provider {
    * @returns Cookie object
    */
   extractCookies?(browser: string): Promise<Record<string, string>>;
+
+  /**
+   * Cleanup resources (close browser sessions, etc.)
+   */
+  cleanup?(): Promise<void>;
 }
 
 /** Lightweight conversation summary for listing */
