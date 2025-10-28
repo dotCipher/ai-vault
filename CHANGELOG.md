@@ -1,3 +1,9 @@
+# [1.4.0](https://github.com/dotCipher/ai-vault/compare/v1.3.0...v1.4.0) (2025-10-28)
+
+### Features
+
+- Grok provider split, smart filtering, list command, and scheduling system ([#1](https://github.com/dotCipher/ai-vault/issues/1)) ([3ad790d](https://github.com/dotCipher/ai-vault/commit/3ad790d1995dc6e9c873fa06057517944708ac3f))
+
 # [1.3.0](https://github.com/dotCipher/ai-vault/compare/v1.2.2...v1.3.0) (2025-10-27)
 
 ### Features
