@@ -85,13 +85,27 @@ program
 
 program
   .command('schedule')
-  .description('Configure automated backup schedule')
-  .option('--daily', 'Schedule daily backups')
-  .option('--cron <expression>', 'Custom cron expression')
-  .option('--list', 'List scheduled jobs')
-  .action(async (options) => {
-    console.log(chalk.blue('Schedule command coming soon!'));
-    console.log(chalk.gray('Options:'), options);
+  .description('Manage automated archiving schedules')
+  .argument('[action]', 'Action: add, list, remove, enable, disable, status')
+  .option('--id <id>', 'Schedule ID (for remove/enable/disable)')
+  .option('-p, --provider <provider>', 'Provider to schedule')
+  .option('--cron <expression>', 'Cron expression (e.g., "0 2 * * *")')
+  .option('--description <text>', 'Schedule description')
+  .option('--limit <number>', 'Maximum conversations to archive per run')
+  .option('--since-days <days>', 'Only archive conversations from last N days')
+  .option('--skip-media', 'Skip downloading media files')
+  .action(async (action, options) => {
+    const { scheduleCommand } = await import('./commands/schedule.js');
+    await scheduleCommand({
+      action: action || 'list',
+      id: options.id,
+      provider: options.provider,
+      cron: options.cron,
+      description: options.description,
+      limit: options.limit,
+      sinceDays: options.sinceDays,
+      skipMedia: options.skipMedia,
+    });
   });
 
 program

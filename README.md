@@ -169,7 +169,7 @@ ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
 ai-vault archive
 
 # Schedule automated backups
-ai-vault schedule --daily
+ai-vault schedule add
 
 # List archived conversations
 ai-vault list
@@ -193,7 +193,10 @@ ai-vault setup --cookies-file ~/Downloads/cookies.json
 **For cookie-based authentication:**
 
 1. Install [Cookie-Editor](https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) extension
-2. Go to the provider's website and log in (e.g., grok.com)
+2. Go to the provider's website and log in:
+   - **grok-web**: grok.com
+   - **grok-x**: x.com/grok
+   - Other providers as applicable
 3. Click Cookie-Editor → Export → JSON
 4. Save to a file
 5. Run `ai-vault setup --cookies-file <path>`
@@ -248,7 +251,10 @@ ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
 
 **Supported import formats:**
 
-- **Grok**: Export from grok.com → Profile → Data & Privacy → Download your data
+- **Grok (grok.com)**: Export from grok.com → Profile → Data & Privacy → Download your data
+  - Use `--provider grok-web` for standalone Grok conversations
+- **Grok on X**: Export from x.com/grok (if available)
+  - Use `--provider grok-x` for X-integrated Grok conversations
 - **ChatGPT**: _(coming soon)_ Export from settings → Data controls → Export data
 - **Claude**: _(coming soon)_ Export from settings
 
@@ -261,16 +267,47 @@ ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
 
 ### Schedule Automated Backups
 
+AI Vault uses native OS schedulers (cron on Unix, Task Scheduler on Windows) for automated backups. No long-running daemon required!
+
 ```bash
-# Set up daily backups
-ai-vault schedule --daily
+# Add a new schedule (interactive)
+ai-vault schedule add
 
-# Custom cron expression
-ai-vault schedule --cron "0 2 * * *"  # Every day at 2 AM
+# Add schedule with options
+ai-vault schedule add --provider grok-web --cron "0 2 * * *" --description "Daily Grok backup"
 
-# View scheduled jobs
-ai-vault schedule --list
+# List all schedules
+ai-vault schedule list
+# or simply
+ai-vault schedule
+
+# Show detailed status (includes system scheduler info)
+ai-vault schedule status
+
+# Remove a schedule
+ai-vault schedule remove --id abc123
+
+# Enable/disable schedules
+ai-vault schedule enable --id abc123
+ai-vault schedule disable --id abc123
+
+# Advanced options
+ai-vault schedule add \
+  --provider grok-web \
+  --cron "0 */6 * * *" \
+  --limit 100 \
+  --since-days 7 \
+  --skip-media
 ```
+
+**Schedule Options:**
+
+- `--cron`: Cron expression (e.g., `"0 2 * * *"` for daily at 2 AM)
+- `--limit`: Maximum conversations per run
+- `--since-days`: Only archive conversations from last N days
+- `--skip-media`: Skip downloading media files
+
+**Logs:** Scheduled runs write logs to `~/.ai-vault/logs/<schedule-id>.log`
 
 ### List Archived Conversations
 
