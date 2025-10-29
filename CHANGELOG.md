@@ -1,3 +1,9 @@
+# [1.7.0](https://github.com/dotCipher/ai-vault/compare/v1.6.0...v1.7.0) (2025-10-29)
+
+### Features
+
+- add status command and clean up debug logging ([#5](https://github.com/dotCipher/ai-vault/issues/5)) ([a9df300](https://github.com/dotCipher/ai-vault/commit/a9df30012468a4d8756c95909b2736f0ad597b18))
+
 # [1.6.0](https://github.com/dotCipher/ai-vault/compare/v1.5.0...v1.6.0) (2025-10-29)
 
 ### Features
