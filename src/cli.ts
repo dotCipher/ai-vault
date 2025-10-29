@@ -44,6 +44,7 @@ program
   .option('--dry-run', 'Preview what would be archived without downloading')
   .option('--skip-media', 'Skip downloading media files (images, videos)')
   .option('--ids <ids...>', 'Specific conversation IDs to archive')
+  .option('-y, --yes', 'Skip confirmation prompt')
   .action(async (options) => {
     const { archiveCommand } = await import('./commands/archive.js');
     await archiveCommand({
@@ -55,6 +56,7 @@ program
       dryRun: options.dryRun,
       skipMedia: options.skipMedia,
       conversationIds: options.ids,
+      yes: options.yes,
     });
   });
 
