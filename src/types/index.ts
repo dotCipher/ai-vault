@@ -14,6 +14,9 @@ export interface ProviderConfig {
   apiKey?: string;
   cookies?: Record<string, string>;
   customEndpoint?: string;
+  // Token caching (provider-specific, e.g., for ChatGPT session tokens)
+  accessToken?: string;
+  tokenExpiry?: string; // ISO 8601 timestamp
 }
 
 export interface ConversationSummary {
