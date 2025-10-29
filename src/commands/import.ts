@@ -177,9 +177,8 @@ export async function importCommand(options: ImportOptions): Promise<void> {
         await storage.saveConversation(conversation);
         imported++;
         spinner.message(`Imported ${imported}/${conversations.length}...`);
-      } catch (error) {
+      } catch {
         errors++;
-        console.error(`Failed to import ${conversation.id}:`, error);
       }
     }
 
@@ -235,9 +234,8 @@ export async function importCommand(options: ImportOptions): Promise<void> {
         }
 
         mediaSpinner.stop(`✓ Copied ${mediaFilesCopied} media files`);
-      } catch (error) {
+      } catch {
         mediaSpinner.stop('Failed to copy some media files');
-        console.error('Media copy error:', error);
       }
     }
 

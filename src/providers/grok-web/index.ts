@@ -131,11 +131,6 @@ export class GrokWebProvider extends BaseProvider {
       domain: '.grok.com',
     });
 
-    // Enable console logging from the page for debugging
-    page.on('console', (msg) => {
-      console.log('PAGE:', msg.text());
-    });
-
     try {
       // Navigate to the conversation page first to establish proper session context
       const url = `https://grok.com/chat/${id}`;
@@ -163,7 +158,6 @@ export class GrokWebProvider extends BaseProvider {
 
           // Step 1: Get all responseIds from response-node endpoint
           const responseNodeUrl = `https://grok.com/rest/app-chat/conversations/${conversationId}/response-node?includeThreads=true`;
-          console.log(`[DEBUG] Step 1: Fetching response nodes from ${responseNodeUrl}`);
 
           const responseNodeResponse = await fetch(responseNodeUrl, {
             method: 'GET',
@@ -173,23 +167,16 @@ export class GrokWebProvider extends BaseProvider {
           let responses = null;
           if (responseNodeResponse.ok) {
             const nodeData = await responseNodeResponse.json();
-            console.log(
-              `[DEBUG] Response nodes data keys:`,
-              Object.keys(nodeData || {}).join(', ')
-            );
 
             if (nodeData.responseNodes && Array.isArray(nodeData.responseNodes)) {
               const responseNodes = nodeData.responseNodes;
-              console.log(`[DEBUG] Found ${responseNodes.length} response nodes`);
 
               // Extract all responseIds
               const responseIds = responseNodes.map((node: any) => node.responseId).filter(Boolean);
-              console.log(`[DEBUG] Extracted ${responseIds.length} responseIds`);
 
               if (responseIds.length > 0) {
                 // Step 2: Fetch actual message content using load-responses with responseIds
                 const loadResponsesUrl = `https://grok.com/rest/app-chat/conversations/${conversationId}/load-responses`;
-                console.log(`[DEBUG] Step 2: Loading ${responseIds.length} responses`);
 
                 const messagesResponse = await fetch(loadResponsesUrl, {
                   method: 'POST',
@@ -200,25 +187,12 @@ export class GrokWebProvider extends BaseProvider {
                   body: JSON.stringify({ responseIds }),
                 });
 
-                console.log(`[DEBUG] load-responses status: ${messagesResponse.status}`);
-
                 if (messagesResponse.ok) {
                   const data = await messagesResponse.json();
-                  console.log(`[DEBUG] Response data keys:`, Object.keys(data || {}).join(', '));
 
                   // The API returns { responses: [...] } array
                   if (data.responses && Array.isArray(data.responses)) {
                     responses = data.responses;
-                    console.log(
-                      `[DEBUG] ✅ Successfully loaded ${responses.length} responses from API`
-                    );
-
-                    if (responses.length > 0) {
-                      console.log(
-                        '[DEBUG] First response sample:',
-                        JSON.stringify(responses[0]).substring(0, 300)
-                      );
-                    }
                   }
                 }
               }
@@ -226,8 +200,7 @@ export class GrokWebProvider extends BaseProvider {
           }
 
           return { metadata, responses };
-        } catch (e) {
-          console.log('[DEBUG] Error in page.evaluate:', e);
+        } catch {
           return null;
         }
       }, id);
@@ -244,8 +217,6 @@ export class GrokWebProvider extends BaseProvider {
 
         const metadata = apiData.metadata;
         const responsesData = apiData.responses;
-
-        console.log(`[INFO] Processing ${responsesData.length} responses from API`);
 
         // Map API responses to our Message format
         // Response format: { responseId, message, sender, createTime, parentResponseId, mediaTypes, ... }
@@ -314,18 +285,8 @@ export class GrokWebProvider extends BaseProvider {
         };
       }
 
-      // If API didn't return messages, log and fall through to page scraping
-      if (apiData) {
-        console.log(
-          '[WARN] API returned data but no responses array, falling back to DOM scraping'
-        );
-      } else {
-        console.log('[WARN] API failed to return data, falling back to DOM scraping');
-      }
-
-      // Fall back to page scraping if API didn't work
+      // If API didn't return messages, fall back to page scraping
       // Note: Page is already on the conversation URL from earlier navigation
-      console.log('[INFO] Using DOM scraping as fallback');
 
       // Track audio URLs from network requests
       const audioUrlsFromNetwork: string[] = [];
@@ -374,37 +335,8 @@ export class GrokWebProvider extends BaseProvider {
       // Scroll to load all messages
       await autoScroll(page);
 
-      // Take a screenshot for debugging
-      await page.screenshot({ path: `/tmp/grok-debug-${id}.png`, fullPage: false });
-      console.log(`[DEBUG] Screenshot saved to /tmp/grok-debug-${id}.png`);
-
       // Extract conversation data with comprehensive DOM inspection
       const data = await page.evaluate(() => {
-        // Log the entire body structure to understand what we're working with
-        console.log(
-          '[DEBUG] Full page text content (first 1000 chars):',
-          document.body.textContent?.substring(0, 1000)
-        );
-
-        // Get all elements and log their structure
-        const allDivs = document.querySelectorAll('div');
-        console.log('[DEBUG] Total div elements:', allDivs.length);
-
-        // Look for any text that might be conversation content
-        const allTextNodes: string[] = [];
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-
-        let node;
-        while ((node = walker.nextNode())) {
-          const text = node.textContent?.trim();
-          if (text && text.length > 20) {
-            // Only meaningful text
-            allTextNodes.push(text);
-          }
-        }
-        console.log('[DEBUG] Text nodes with substantial content:', allTextNodes.length);
-        console.log('[DEBUG] Sample text nodes:', allTextNodes.slice(0, 10));
-
         // Try multiple title selectors
         const titleSelectors = [
           'h1',
@@ -444,7 +376,6 @@ export class GrokWebProvider extends BaseProvider {
         let messageEls: Element[] = [];
         for (const selector of messageSelectors) {
           const elements = Array.from(document.querySelectorAll(selector));
-          console.log(`[DEBUG] Selector '${selector}': ${elements.length} elements`);
           // Filter out SVG and other non-message elements
           const filtered = elements.filter((el) => {
             return (
@@ -455,15 +386,9 @@ export class GrokWebProvider extends BaseProvider {
               el.textContent.trim().length > 5
             ); // Has substantial content
           });
-          console.log(`[DEBUG] After filtering: ${filtered.length} elements`);
           if (filtered.length > 0 && filtered.length < 1000) {
             // Avoid selecting too generic
             messageEls = filtered;
-            console.log(`[DEBUG] Using selector '${selector}' with ${filtered.length} elements`);
-            // Log first element's structure
-            if (filtered[0]) {
-              console.log('[DEBUG] First element HTML:', filtered[0].outerHTML.substring(0, 300));
-            }
             break;
           }
         }
@@ -494,41 +419,13 @@ export class GrokWebProvider extends BaseProvider {
         });
 
         const messages = messageEls.map((el: Element, idx: number) => {
-          // Debug: Log element structure for first few messages to understand roles
-          if (idx < 3) {
-            console.log(`[DEBUG] Message ${idx} classes:`, el.className);
-            console.log(`[DEBUG] Message ${idx} parent classes:`, el.parentElement?.className);
-
-            // Look for any role-related attributes
-            const allAttributes = Array.from(el.attributes || []).map(
-              (attr) => `${attr.name}=${attr.value}`
-            );
-            console.log(`[DEBUG] Message ${idx} attributes:`, allAttributes.join(', '));
-
-            // Check siblings for role labels
-            const prevSibling = el.previousElementSibling;
-            const parent = el.parentElement;
-            const parentPrevSibling = parent?.previousElementSibling;
-
-            console.log(
-              `[DEBUG] Message ${idx} previous sibling:`,
-              prevSibling?.textContent?.substring(0, 100) || 'none'
-            );
-            console.log(
-              `[DEBUG] Message ${idx} parent prev sibling:`,
-              parentPrevSibling?.textContent?.substring(0, 100) || 'none'
-            );
-          }
-
           // Try to extract the actual role from various sources
           let role = 'assistant'; // default
-          let roleSource = 'default';
 
           // Method 1: Check for data-role attribute
           const dataRole = el.getAttribute('data-role');
           if (dataRole) {
             role = dataRole;
-            roleSource = 'data-role';
           }
 
           // Method 2: Check parent container for role
@@ -537,7 +434,6 @@ export class GrokWebProvider extends BaseProvider {
             const parentRole = parent.getAttribute('data-role');
             if (parentRole) {
               role = parentRole;
-              roleSource = 'parent-data-role';
             }
           }
 
@@ -552,8 +448,6 @@ export class GrokWebProvider extends BaseProvider {
               else if (prevText.includes('assistant') || prevText.includes('grok'))
                 role = 'assistant';
               else if (prevText.includes('eve')) role = 'Eve';
-              // Store whatever we find
-              if (role !== 'assistant') roleSource = 'prev-sibling';
             }
           }
 
@@ -575,13 +469,8 @@ export class GrokWebProvider extends BaseProvider {
               ) {
                 // Max 4 words
                 role = labelText;
-                roleSource = 'parent-prev-sibling';
               }
             }
-          }
-
-          if (idx < 3) {
-            console.log(`[DEBUG] Message ${idx} detected role: "${role}" (source: ${roleSource})`);
           }
 
           // Extract content - use textContent of the element directly

@@ -76,8 +76,20 @@ program
   });
 
 program
+  .command('status')
+  .description('Show sync status - compare remote conversations with local archive')
+  .option('-p, --provider <provider>', 'Provider to check (grok-web, chatgpt, etc.)')
+  .option('--since <date>', 'Check conversations since date (YYYY-MM-DD)')
+  .option('--until <date>', 'Check conversations until date (YYYY-MM-DD)')
+  .option('--limit <number>', 'Maximum number of conversations to check')
+  .action(async (options) => {
+    const { statusCommand } = await import('./commands/status.js');
+    await statusCommand(options);
+  });
+
+program
   .command('list')
-  .description('List conversations from configured providers')
+  .description('[DEPRECATED: use "status" instead] List conversations from providers')
   .option('-p, --provider <provider>', 'Provider to list from (grok-web, grok-x, etc.)')
   .option('--search <query>', 'Search conversations by title or preview')
   .option('--since <date>', 'List conversations since date (YYYY-MM-DD)')

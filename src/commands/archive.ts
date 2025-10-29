@@ -186,7 +186,6 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     clack.log.error(
       'Archive failed: ' + (error instanceof Error ? error.message : 'Unknown error')
     );
-    console.error(error);
     process.exit(1);
   } finally {
     if (provider.cleanup) {
