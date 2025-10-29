@@ -1,3 +1,9 @@
+# [1.8.0](https://github.com/dotCipher/ai-vault/compare/v1.7.0...v1.8.0) (2025-10-29)
+
+### Features
+
+- add bearer token caching for ChatGPT provider ([#6](https://github.com/dotCipher/ai-vault/issues/6)) ([46e8d59](https://github.com/dotCipher/ai-vault/commit/46e8d59ae09a2cb17b1b5756b8aaca51d9299052))
+
 # [1.7.0](https://github.com/dotCipher/ai-vault/compare/v1.6.0...v1.7.0) (2025-10-29)
 
 ### Features
