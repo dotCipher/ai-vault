@@ -9,6 +9,7 @@ import { getProvider } from '../providers/index.js';
 import { createArchiver } from '../core/archiver.js';
 import type { Provider } from '../types/provider.js';
 import type { ArchiveOptions } from '../types/storage.js';
+import { captureSnapshot, calculateDiff, printDataDiff } from '../utils/data-diff.js';
 
 interface ArchiveCommandOptions {
   provider?: string;
@@ -157,7 +158,22 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
   const archiver = createArchiver(archiveDir);
 
   try {
+    // Capture stats before archiving (for data diff)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const storage = (archiver as any).storage;
+    const beforeSnapshot = await captureSnapshot(storage, providerName);
+
+    // Run archive
     const result = await archiver.archive(provider, archiveOptions);
+
+    // Capture stats after archiving (for data diff)
+    const afterSnapshot = await captureSnapshot(storage, providerName);
+
+    // Calculate and display data diff
+    if (!archiveOptions.dryRun) {
+      const diff = calculateDiff(beforeSnapshot, afterSnapshot);
+      printDataDiff(diff, beforeSnapshot, afterSnapshot, 'archive');
+    }
 
     console.log();
 

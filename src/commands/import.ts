@@ -11,6 +11,7 @@ import { loadConfig } from '../utils/config.js';
 import { createArchiver } from '../core/archiver.js';
 import { prepareImportPath } from '../utils/zip.js';
 import type { Conversation, Message } from '../types/index.js';
+import { captureSnapshot, calculateDiff, printDataDiff } from '../utils/data-diff.js';
 
 interface ImportOptions {
   provider?: string;
@@ -162,6 +163,9 @@ export async function importCommand(options: ImportOptions): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storage = (archiver as any).storage; // Access storage from archiver
 
+    // Capture stats before importing (for data diff)
+    const beforeSnapshot = await captureSnapshot(storage, provider);
+
     const spinner = clack.spinner();
     spinner.start('Importing conversations...');
 
@@ -236,6 +240,13 @@ export async function importCommand(options: ImportOptions): Promise<void> {
         console.error('Media copy error:', error);
       }
     }
+
+    // Capture stats after importing (for data diff)
+    const afterSnapshot = await captureSnapshot(storage, provider);
+
+    // Calculate and display data diff
+    const diff = calculateDiff(beforeSnapshot, afterSnapshot);
+    printDataDiff(diff, beforeSnapshot, afterSnapshot, 'import');
 
     console.log();
 
