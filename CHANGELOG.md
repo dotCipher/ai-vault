@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/dotCipher/ai-vault/compare/v1.5.0...v1.6.0) (2025-10-29)
+
+### Features
+
+- add compact data diff summaries for import and archive ([#4](https://github.com/dotCipher/ai-vault/issues/4)) ([b5e72b7](https://github.com/dotCipher/ai-vault/commit/b5e72b7a5ebe3cb03231fdb632ba24caacd829d7))
+- complete message retrieval for grok-web conversations ([#3](https://github.com/dotCipher/ai-vault/issues/3)) ([d871561](https://github.com/dotCipher/ai-vault/commit/d871561bcbe5509b2c86645afe7951d5ebeefe2f))
+
 # [1.5.0](https://github.com/dotCipher/ai-vault/compare/v1.4.0...v1.5.0) (2025-10-28)
 
 ### Features
