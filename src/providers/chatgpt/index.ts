@@ -10,10 +10,11 @@
  */
 
 import { BaseProvider } from '../base.js';
-import type { ProviderConfig, Conversation, Message, Attachment } from '../../types/index.js';
+import type { ProviderConfig, Conversation, Message } from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError } from '../../types/provider.js';
 import { BrowserScraper } from '../../utils/scraper.js';
+import { saveProviderConfig } from '../../utils/config.js';
 
 export class ChatGPTProvider extends BaseProvider {
   readonly name = 'chatgpt' as const;
@@ -21,6 +22,64 @@ export class ChatGPTProvider extends BaseProvider {
   readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['cookies'];
 
   private scraper?: BrowserScraper;
+
+  /**
+   * Check if cached token is still valid
+   */
+  private isTokenValid(): boolean {
+    const cachedToken = this.config?.accessToken;
+    const tokenExpiry = this.config?.tokenExpiry;
+
+    if (!cachedToken || !tokenExpiry) {
+      return false;
+    }
+
+    const expiryDate = new Date(tokenExpiry);
+    const now = new Date();
+
+    // Add 5 minute buffer before expiry
+    const bufferMs = 5 * 60 * 1000;
+    return expiryDate.getTime() - now.getTime() > bufferMs;
+  }
+
+  /**
+   * Fetch new access token from session API
+   */
+  private async fetchAccessToken(page: any): Promise<{ token: string; expiry: string }> {
+    const { accessToken, sessionData } = await page.evaluate(async () => {
+      const sessionRes = await fetch('https://chatgpt.com/api/auth/session', {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!sessionRes.ok) {
+        return { accessToken: null, sessionData: null };
+      }
+
+      const data = await sessionRes.json();
+      return {
+        accessToken: data?.accessToken || null,
+        sessionData: data,
+      };
+    });
+
+    if (!accessToken || !sessionData?.expires) {
+      throw new Error('Failed to obtain access token from session');
+    }
+
+    // Cache the token and expiry in config
+    if (this.config) {
+      this.config.accessToken = accessToken;
+      this.config.tokenExpiry = sessionData.expires;
+
+      // Save updated config to disk (async, don't wait)
+      saveProviderConfig(this.config).catch((err) => {
+        console.error('[ChatGPT] Failed to save token to config:', err.message);
+      });
+    }
+
+    return { token: accessToken, expiry: sessionData.expires };
+  }
 
   /**
    * Authenticate with ChatGPT
@@ -66,7 +125,7 @@ export class ChatGPTProvider extends BaseProvider {
   }
 
   /**
-   * List conversations from ChatGPT
+   * List conversations from ChatGPT using backend API
    */
   async listConversations(options: ListConversationsOptions = {}): Promise<ConversationSummary[]> {
     this.requireAuth();
@@ -77,75 +136,78 @@ export class ChatGPTProvider extends BaseProvider {
     });
 
     try {
-      await page.goto('https://chatgpt.com', { waitUntil: 'networkidle', timeout: 30000 });
+      let accessToken: string;
 
-      // Wait for conversations to load
-      await page.waitForSelector('[data-testid="conversation-item"], .conversation-item', {
-        timeout: 10000,
-      });
+      // Check if we have a valid cached token
+      if (this.isTokenValid()) {
+        console.log('[ChatGPT] Using cached access token');
+        accessToken = this.config!.accessToken!;
+        // Quick navigation without waiting for full load
+        await page.goto('https://chatgpt.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      } else {
+        console.log('[ChatGPT] Fetching new access token...');
+        // Full navigation to establish session
+        await page.goto('https://chatgpt.com', { waitUntil: 'networkidle', timeout: 30000 });
+        const result = await this.fetchAccessToken(page);
+        accessToken = result.token;
+      }
 
-      // Scroll to load more conversations
-      await page.evaluate(() => {
-        const sidebar = document.querySelector(
-          '[data-testid="conversation-list"], .conversation-list'
-        );
-        if (sidebar) {
-          sidebar.scrollTo(0, sidebar.scrollHeight);
-        }
-      });
+      // Use backend API to fetch conversations
+      const limit = options.limit || 100;
+      const apiUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=false&is_starred=false`;
 
-      await page.waitForTimeout(1000);
-
-      // Extract conversation list
-      const conversations = await page.evaluate(() => {
-        const items = Array.from(
-          document.querySelectorAll('[data-testid="conversation-item"], .conversation-item')
-        );
-
-        return items.map((item, idx) => {
-          const titleEl = item.querySelector(
-            '[data-testid="conversation-title"], .conversation-title, h3'
-          );
-          const title = titleEl?.textContent?.trim() || `Untitled ${idx + 1}`;
-
-          const linkEl = item.querySelector('a[href*="/c/"]');
-          const href = linkEl?.getAttribute('href') || '';
-          const id = href.split('/c/')[1]?.split('?')[0] || `conv-${idx}`;
-
-          const timeEl = item.querySelector('time, [data-testid="conversation-time"]');
-          const timeStr = timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim();
-          const updatedAt = timeStr ? new Date(timeStr) : new Date();
-
-          return {
-            id,
-            title,
-            messageCount: 0, // Unknown from list view
-            createdAt: updatedAt, // Best guess
-            updatedAt,
-            hasMedia: false, // Unknown from list view
-            preview: undefined,
+      const response = await page.evaluate(
+        async ({ url, token }) => {
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
           };
-        });
-      });
+
+          const res = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers,
+          });
+
+          if (!res.ok) {
+            throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+          }
+
+          return await res.json();
+        },
+        { url: apiUrl, token: accessToken }
+      );
 
       await page.close();
 
-      // Apply filters
-      let filtered: ConversationSummary[] = conversations;
+      // Parse API response
+      const conversations = response.items || [];
 
+      if (!Array.isArray(conversations)) {
+        throw new Error('Unexpected API response format');
+      }
+
+      // Transform to ConversationSummary format
+      let summaries: ConversationSummary[] = conversations.map((conv: any) => ({
+        id: conv.id,
+        title: conv.title || 'Untitled',
+        messageCount: 0, // Not provided in list API
+        createdAt: conv.create_time ? new Date(conv.create_time * 1000) : new Date(),
+        updatedAt: conv.update_time ? new Date(conv.update_time * 1000) : new Date(),
+        hasMedia: false, // Will be determined when fetching full conversation
+        preview: undefined,
+      }));
+
+      // Apply filters
       if (options.since) {
-        filtered = filtered.filter((c: ConversationSummary) => c.updatedAt >= options.since!);
+        summaries = summaries.filter((c) => c.updatedAt >= options.since!);
       }
 
       if (options.until) {
-        filtered = filtered.filter((c: ConversationSummary) => c.updatedAt <= options.until!);
+        summaries = summaries.filter((c) => c.updatedAt <= options.until!);
       }
 
-      if (options.limit) {
-        filtered = filtered.slice(0, options.limit);
-      }
-
-      return filtered;
+      return summaries;
     } catch (error) {
       await page.close();
       throw error;
@@ -153,111 +215,112 @@ export class ChatGPTProvider extends BaseProvider {
   }
 
   /**
-   * Fetch a full conversation from ChatGPT
+   * Fetch a full conversation from ChatGPT using backend API
    */
   async fetchConversation(id: string): Promise<Conversation> {
     this.requireAuth();
 
-    const url = `https://chatgpt.com/c/${id}`;
     const page = await this.scraper!.createPage({
       cookies: this.config!.cookies!,
       domain: '.chatgpt.com',
     });
 
     try {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+      let accessToken: string;
 
-      // Wait for messages to load
-      await page.waitForSelector('[data-testid*="message"], .message, [data-message-author-role]', {
-        timeout: 10000,
-      });
+      // Check if we have a valid cached token
+      if (this.isTokenValid()) {
+        console.log('[ChatGPT] Using cached access token');
+        accessToken = this.config!.accessToken!;
+        // Quick navigation without waiting for full load
+        await page.goto('https://chatgpt.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      } else {
+        console.log('[ChatGPT] Fetching new access token...');
+        // Full navigation to establish session
+        await page.goto('https://chatgpt.com', { waitUntil: 'networkidle', timeout: 30000 });
+        const result = await this.fetchAccessToken(page);
+        accessToken = result.token;
+      }
 
-      // Extract conversation data
-      const data = await page.evaluate(() => {
-        // Get title
-        const titleEl = document.querySelector('[data-testid="conversation-title"], h1, .text-2xl');
-        const title = titleEl?.textContent?.trim() || 'Untitled';
+      // Use backend API to fetch conversation data
+      const apiUrl = `https://chatgpt.com/backend-api/conversation/${id}`;
 
-        // Get all messages
-        const messageEls = Array.from(
-          document.querySelectorAll(
-            '[data-testid*="message"], [data-message-author-role], .group.w-full'
-          )
-        ) as Element[];
+      const data = await page.evaluate(
+        async ({ url, token }) => {
+          const res = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-        const messages = messageEls.map((el: Element, idx: number) => {
-          // Determine role
-          const roleAttr = el.getAttribute('data-message-author-role');
-          const isUser =
-            roleAttr === 'user' ||
-            el.querySelector('[data-testid="user-message"]') !== null ||
-            el.classList.contains('user-message');
+          if (!res.ok) {
+            throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+          }
 
-          const role = isUser ? 'user' : 'assistant';
-
-          // Get content
-          const contentEl = el.querySelector('[data-message-author-role] + div, .markdown, .prose');
-          const content = contentEl?.textContent?.trim() || '';
-
-          // Get timestamp
-          const timeEl = el.querySelector('time');
-          const timestamp = timeEl?.getAttribute('datetime') || new Date().toISOString();
-
-          // Extract media attachments
-          const imageEls = Array.from(
-            el.querySelectorAll('img[src]:not([src*="avatar"])')
-          ) as HTMLImageElement[];
-          const videoEls = Array.from(el.querySelectorAll('video')) as HTMLVideoElement[];
-
-          const attachments = [
-            ...imageEls.map((img: HTMLImageElement, mediaIdx: number) => ({
-              id: `${idx}-img-${mediaIdx}`,
-              type: 'image' as const,
-              url: img.src,
-            })),
-            ...videoEls.map((video: HTMLVideoElement, mediaIdx: number) => ({
-              id: `${idx}-vid-${mediaIdx}`,
-              type: 'video' as const,
-              url: video.src || video.querySelector('source')?.src || '',
-            })),
-          ].filter((att) => att.url);
-
-          return {
-            id: `msg-${idx}`,
-            role,
-            content,
-            timestamp,
-            attachments: attachments.length > 0 ? attachments : undefined,
-          };
-        });
-
-        return { title, messages };
-      });
+          return await res.json();
+        },
+        { url: apiUrl, token: accessToken }
+      );
 
       await page.close();
 
-      // Transform to standard format
-      const messages: Message[] = data.messages.map((msg: any) => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.timestamp),
-        attachments: msg.attachments?.map(
-          (att: any): Attachment => ({
-            id: att.id,
-            type: att.type,
-            url: att.url,
-          })
-        ),
-      }));
+      // Extract messages from the conversation data
+      const title = data.title || 'Untitled';
+      const messages: Message[] = [];
+
+      // Parse the conversation mapping structure
+      const mapping = data.mapping || {};
+
+      // Build message chain by traversing the tree
+      const messageNodes: any[] = [];
+      for (const nodeId in mapping) {
+        const node = mapping[nodeId];
+        if (node.message && node.message.content && node.message.content.parts) {
+          messageNodes.push(node);
+        }
+      }
+
+      // Sort by create_time
+      messageNodes.sort((a, b) => {
+        const timeA = a.message?.create_time || 0;
+        const timeB = b.message?.create_time || 0;
+        return timeA - timeB;
+      });
+
+      // Transform to Message format
+      for (const node of messageNodes) {
+        const msg = node.message;
+        const role = msg.author?.role === 'user' ? 'user' : 'assistant';
+
+        // Extract text content from parts
+        const parts = msg.content?.parts || [];
+        const content = parts.filter((p: any) => typeof p === 'string').join('\n');
+
+        if (content) {
+          messages.push({
+            id: msg.id || node.id,
+            role,
+            content,
+            timestamp: msg.create_time ? new Date(msg.create_time * 1000) : new Date(),
+            attachments: undefined, // TODO: Extract attachments if needed
+          });
+        }
+      }
 
       return {
         id,
         provider: this.name,
-        title: data.title,
+        title,
         messages,
-        createdAt: messages[0]?.timestamp || new Date(),
-        updatedAt: messages[messages.length - 1]?.timestamp || new Date(),
+        createdAt: data.create_time
+          ? new Date(data.create_time * 1000)
+          : messages[0]?.timestamp || new Date(),
+        updatedAt: data.update_time
+          ? new Date(data.update_time * 1000)
+          : messages[messages.length - 1]?.timestamp || new Date(),
         metadata: {
           messageCount: messages.length,
           characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
