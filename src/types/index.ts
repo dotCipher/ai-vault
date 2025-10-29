@@ -30,7 +30,7 @@ export interface ConversationSummary {
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: string; // Support arbitrary roles like 'user', 'assistant', 'system', 'Sexy', 'Eve', etc.
   content: string;
   timestamp: Date;
   metadata?: MessageMetadata;

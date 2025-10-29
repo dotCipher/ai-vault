@@ -19,6 +19,7 @@ interface ArchiveCommandOptions {
   dryRun?: boolean;
   skipMedia?: boolean;
   conversationIds?: string[];
+  yes?: boolean;
 }
 
 export async function archiveCommand(options: ArchiveCommandOptions): Promise<void> {
@@ -129,8 +130,8 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
   clack.log.info(`  Mode: ${archiveOptions.dryRun ? 'Dry Run (preview only)' : 'Live'}`);
   console.log();
 
-  // Confirm if not dry run
-  if (!archiveOptions.dryRun) {
+  // Confirm if not dry run and --yes not provided
+  if (!archiveOptions.dryRun && !options.yes) {
     const confirm = await clack.confirm({
       message: 'Start archiving?',
     });

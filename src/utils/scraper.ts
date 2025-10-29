@@ -119,6 +119,64 @@ export async function autoScroll(
 }
 
 /**
+ * Scroll up to load all historical messages in chat applications
+ * Many chat apps load older messages when scrolling to the top
+ */
+export async function scrollToLoadAllMessages(
+  page: Page,
+  options: {
+    maxScrolls?: number;
+    scrollDelay?: number;
+    waitForLoad?: number;
+  } = {}
+): Promise<void> {
+  const { maxScrolls = 100, scrollDelay = 500, waitForLoad = 1000 } = options;
+
+  await page.evaluate(
+    async ({ maxScrolls, scrollDelay, waitForLoad }) => {
+      // Helper to wait
+      const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      // Get current message count
+      let previousMessageCount = 0;
+      let stableCount = 0;
+
+      for (let i = 0; i < maxScrolls; i++) {
+        // Scroll to top
+        window.scrollTo(0, 0);
+
+        // Wait for new messages to load
+        await wait(waitForLoad);
+
+        // Count messages (look for common message selectors)
+        const currentMessageCount = document.querySelectorAll(
+          '[class*="message"], [class*="Message"], [data-message], .message-bubble, [class*="message-bubble"]'
+        ).length;
+
+        console.log(`[DEBUG] Scroll ${i + 1}: ${currentMessageCount} messages found`);
+
+        // Check if we loaded new messages
+        if (currentMessageCount === previousMessageCount) {
+          stableCount++;
+          // If message count hasn't changed for 3 iterations, we're done
+          if (stableCount >= 3) {
+            console.log('[DEBUG] Message count stable, all messages loaded');
+            break;
+          }
+        } else {
+          stableCount = 0;
+          previousMessageCount = currentMessageCount;
+        }
+
+        // Brief delay before next scroll
+        await wait(scrollDelay);
+      }
+    },
+    { maxScrolls, scrollDelay, waitForLoad }
+  );
+}
+
+/**
  * Wait for any selector from a list
  */
 export async function waitForAnySelector(
