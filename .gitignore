@@ -36,6 +36,9 @@ Thumbs.db
 *.swo
 *~
 
+# Claude Code
+.claude/settings.local.json
+
 # Playwright
 playwright/.cache/
 test-results/
