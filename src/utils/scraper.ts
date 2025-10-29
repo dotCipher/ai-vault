@@ -153,14 +153,11 @@ export async function scrollToLoadAllMessages(
           '[class*="message"], [class*="Message"], [data-message], .message-bubble, [class*="message-bubble"]'
         ).length;
 
-        console.log(`[DEBUG] Scroll ${i + 1}: ${currentMessageCount} messages found`);
-
         // Check if we loaded new messages
         if (currentMessageCount === previousMessageCount) {
           stableCount++;
           // If message count hasn't changed for 3 iterations, we're done
           if (stableCount >= 3) {
-            console.log('[DEBUG] Message count stable, all messages loaded');
             break;
           }
         } else {
