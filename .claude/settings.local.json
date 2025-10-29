@@ -8,7 +8,9 @@
       "Bash(pnpm test:*)",
       "WebSearch",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(ssh-add:*)",
+      "Read(//Users/codymoore/.ssh/**)"
     ],
     "deny": [],
     "ask": []
