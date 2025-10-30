@@ -44,7 +44,8 @@ export class MediaManager {
    */
   async downloadConversationMedia(
     conversation: Conversation,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    cookies?: Record<string, string>
   ): Promise<MediaDownloadResult> {
     const result: MediaDownloadResult = {
       downloaded: 0,
@@ -72,29 +73,145 @@ export class MediaManager {
       onProgress?.(current, total);
 
       try {
-        const downloadResult = await this.downloadMedia(
-          attachment.url,
-          attachment.type,
-          conversation.provider,
-          conversation.id
-        );
-
-        if (downloadResult.skipped) {
+        // Validate URL exists and is not empty
+        if (!attachment.url || attachment.url.trim() === '') {
+          console.warn(`Skipping attachment with empty URL:`, {
+            id: attachment.id,
+            type: attachment.type,
+          });
           result.skipped++;
+          continue;
+        }
+
+        // Check for unsupported internal protocols
+        const url = attachment.url.trim();
+        if (url.startsWith('file-service://') || url.startsWith('sediment://')) {
+          if (process.env.DEBUG) {
+            console.warn(`Skipping attachment with internal protocol URL:`, {
+              id: attachment.id,
+              type: attachment.type,
+              protocol: url.split('://')[0] + '://',
+            });
+          }
+          result.skipped++;
+          continue;
+        }
+
+        // Check if this media was already downloaded through the browser
+        const browserData = attachment.metadata?.browserDownloaded;
+
+        if (browserData && browserData.data) {
+          // Save browser-downloaded data directly
+          const downloadResult = await this.saveMediaFromBuffer(
+            browserData.data,
+            browserData.mimeType || 'application/octet-stream',
+            attachment.type,
+            conversation.provider,
+            conversation.id
+          );
+
+          if (downloadResult.skipped) {
+            result.skipped++;
+          } else {
+            result.downloaded++;
+            result.bytes += downloadResult.size;
+          }
         } else {
-          result.downloaded++;
-          result.bytes += downloadResult.size;
+          // Download via HTTP
+          const downloadResult = await this.downloadMedia(
+            attachment.url,
+            attachment.type,
+            conversation.provider,
+            conversation.id,
+            cookies
+          );
+
+          if (downloadResult.skipped) {
+            result.skipped++;
+          } else {
+            result.downloaded++;
+            result.bytes += downloadResult.size;
+          }
         }
       } catch (error) {
         result.failed++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        // Log more details for debugging
+        console.error(`Media download error details:`, {
+          url: attachment.url || '(empty)',
+          urlLength: attachment.url?.length || 0,
+          type: attachment.type,
+          hasBrowserData: !!attachment.metadata?.browserDownloaded,
+          error: errorMessage,
+        });
+
         result.errors.push({
-          url: attachment.url,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          url: attachment.url || '(empty URL)',
+          error: errorMessage,
         });
       }
     }
 
     return result;
+  }
+
+  /**
+   * Save media from an already-downloaded buffer (e.g., from browser context)
+   */
+  async saveMediaFromBuffer(
+    buffer: Buffer,
+    mimeType: string,
+    type: string,
+    provider: string,
+    conversationId: string
+  ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
+    // Calculate hash from buffer
+    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+    const size = buffer.length;
+
+    // Check if we already have this file
+    if (this.registry[hash]) {
+      // File already exists, just update references
+      if (!this.registry[hash].references.includes(conversationId)) {
+        this.registry[hash].references.push(conversationId);
+        await this.saveRegistry();
+      }
+
+      return {
+        path: this.registry[hash].path,
+        size: this.registry[hash].size,
+        hash,
+        skipped: true,
+      };
+    }
+
+    // New file - determine permanent location
+    const extension = this.getExtension(mimeType, '');
+    const mediaType = this.getMediaType(type, mimeType);
+    const fileName = `${hash}${extension}`;
+    const permanentPath = path.join(this.baseDir, provider, 'media', mediaType, fileName);
+
+    // Write buffer to permanent location
+    await fs.mkdir(path.dirname(permanentPath), { recursive: true });
+    await fs.writeFile(permanentPath, buffer);
+
+    // Add to registry
+    this.registry[hash] = {
+      path: permanentPath,
+      size,
+      mimeType,
+      firstSeen: new Date().toISOString(),
+      references: [conversationId],
+    };
+    await this.saveRegistry();
+
+    return {
+      path: permanentPath,
+      size,
+      hash,
+      skipped: false,
+    };
   }
 
   /**
@@ -104,7 +221,8 @@ export class MediaManager {
     url: string,
     type: string,
     provider: string,
-    conversationId: string
+    conversationId: string,
+    cookies?: Record<string, string>
   ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
     // Download to temp location first to calculate hash
     const tempPath = path.join(this.baseDir, '.temp', `download-${Date.now()}`);
@@ -112,7 +230,7 @@ export class MediaManager {
 
     try {
       // Download file
-      const { hash, size, mimeType } = await this.downloadToFile(url, tempPath);
+      const { hash, size, mimeType } = await this.downloadToFile(url, tempPath, cookies);
 
       // Check if we already have this file
       if (this.registry[hash]) {
@@ -173,15 +291,46 @@ export class MediaManager {
    */
   private async downloadToFile(
     url: string,
-    outputPath: string
+    outputPath: string,
+    cookies?: Record<string, string>
   ): Promise<{ hash: string; size: number; mimeType: string }> {
-    const response = await axios.get(url, {
-      responseType: 'stream',
-      headers: {
-        'User-Agent': 'ai-vault/1.0.0',
-      },
-      timeout: 60000,
-    });
+    // Build Cookie header from cookies object
+    const cookieHeader = cookies
+      ? Object.entries(cookies)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('; ')
+      : undefined;
+
+    const headers: Record<string, string> = {
+      'User-Agent': 'ai-vault/1.0.0',
+    };
+
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader;
+    }
+
+    let response;
+    try {
+      response = await axios.get(url, {
+        responseType: 'stream',
+        headers,
+        timeout: 60000,
+        validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+      });
+
+      // Check if response was successful
+      if (response.status >= 400) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error: any) {
+      // Add more context to the error
+      if (error.response) {
+        throw new Error(`HTTP ${error.response.status}: ${error.response.statusText} - ${url}`);
+      } else if (error.code) {
+        throw new Error(`${error.code}: ${error.message} - ${url}`);
+      }
+      throw error;
+    }
 
     const hash = crypto.createHash('sha256');
     let size = 0;

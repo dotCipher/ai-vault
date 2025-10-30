@@ -1,11 +1,5 @@
 /**
  * Grok Web Provider Tests
- *
- * TODO: These tests need to be updated to reflect the grok-web provider changes.
- * Tests are currently skipped and need to be updated to:
- * - Use GrokWebProvider instead of GrokProvider
- * - Update provider name from 'grok' to 'grok-web'
- * - Remove API key authentication tests (cookies only)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -45,7 +39,7 @@ function mockBrowserScraper(mockPage: any) {
   return { mockScraper };
 }
 
-describe.skip('GrokWebProvider', () => {
+describe('GrokWebProvider', () => {
   let provider: GrokWebProvider;
 
   beforeEach(() => {
@@ -218,6 +212,9 @@ describe.skip('GrokWebProvider', () => {
       const mockPage = {
         goto: vi.fn().mockResolvedValue(undefined),
         url: vi.fn().mockReturnValue('https://grok.com/chat/invalid-id'),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(),
+        evaluate: vi.fn().mockResolvedValue(null), // API returns null
         $: vi.fn().mockResolvedValue(true), // error page found
         close: vi.fn().mockResolvedValue(undefined),
       };
@@ -234,28 +231,27 @@ describe.skip('GrokWebProvider', () => {
     });
 
     it('should fetch and parse conversation correctly', async () => {
-      const mockConversationData = {
-        title: 'Test Chat',
-        messages: [
+      // Mock API response format that matches the actual API
+      const mockApiData = {
+        metadata: {
+          id: 'test-id',
+          title: 'Test Chat',
+          createTime: '2025-01-01T00:00:00Z',
+          modifyTime: '2025-01-01T00:02:00Z',
+        },
+        responses: [
           {
-            id: 'msg-0',
-            role: 'user',
-            content: 'Hello',
-            timestamp: '2025-01-01T00:00:00Z',
-            attachments: [],
+            responseId: 'resp-0',
+            sender: 'human',
+            message: 'Hello',
+            createTime: '2025-01-01T00:00:00Z',
           },
           {
-            id: 'msg-1',
-            role: 'assistant',
-            content: 'Hi there!',
-            timestamp: '2025-01-01T00:01:00Z',
-            attachments: [
-              {
-                id: '1-0',
-                type: 'image',
-                url: 'https://example.com/image.png',
-              },
-            ],
+            responseId: 'resp-1',
+            sender: 'grok',
+            message: 'Hi there!',
+            createTime: '2025-01-01T00:01:00Z',
+            generatedImageUrls: ['https://example.com/image.png'],
           },
         ],
       };
@@ -263,8 +259,10 @@ describe.skip('GrokWebProvider', () => {
       const mockPage = {
         goto: vi.fn().mockResolvedValue(undefined),
         url: vi.fn().mockReturnValue('https://grok.com/chat/test-id'),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
         $: vi.fn().mockResolvedValue(null), // no error page
-        evaluate: vi.fn().mockResolvedValue(mockConversationData),
+        on: vi.fn(), // for response listener
+        evaluate: vi.fn().mockResolvedValue(mockApiData),
         close: vi.fn().mockResolvedValue(undefined),
       };
 
@@ -286,6 +284,8 @@ describe.skip('GrokWebProvider', () => {
       });
       expect(conversation.messages).toHaveLength(2);
       expect(conversation.messages[0].content).toBe('Hello');
+      expect(conversation.messages[0].role).toBe('user');
+      expect(conversation.messages[1].content).toBe('Hi there!');
       expect(conversation.messages[1].attachments).toHaveLength(1);
       expect(conversation.metadata.messageCount).toBe(2);
       expect(conversation.metadata.mediaCount).toBe(1);

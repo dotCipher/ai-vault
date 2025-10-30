@@ -22,6 +22,7 @@ export class ChatGPTProvider extends BaseProvider {
   readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['cookies'];
 
   private scraper?: BrowserScraper;
+  private conversationProjects: Map<string, string> = new Map(); // conversationId -> projectName
 
   /**
    * Check if cached token is still valid
@@ -152,36 +153,61 @@ export class ChatGPTProvider extends BaseProvider {
         accessToken = result.token;
       }
 
-      // Use backend API to fetch conversations
+      // Use backend API to fetch both conversations and projects
       const limit = options.limit || 100;
-      const apiUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=false&is_starred=false`;
+      const conversationsUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=false&is_starred=false`;
+      const projectsUrl = `https://chatgpt.com/backend-api/gizmos/snorlax/sidebar?conversations_per_gizmo=20&owned_only=true`;
 
       const response = await page.evaluate(
-        async ({ url, token }) => {
+        async ({ conversationsUrl, projectsUrl, token }) => {
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           };
 
-          const res = await fetch(url, {
+          // Fetch regular conversations
+          const conversationsRes = await fetch(conversationsUrl, {
             method: 'GET',
             credentials: 'include',
             headers,
           });
 
-          if (!res.ok) {
-            throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+          if (!conversationsRes.ok) {
+            throw new Error(
+              `API request failed: ${conversationsRes.status} ${conversationsRes.statusText}`
+            );
           }
 
-          return await res.json();
+          const conversationsData = await conversationsRes.json();
+
+          // Fetch projects
+          let projectsData = null;
+          try {
+            const projectsRes = await fetch(projectsUrl, {
+              method: 'GET',
+              credentials: 'include',
+              headers,
+            });
+
+            if (projectsRes.ok) {
+              projectsData = await projectsRes.json();
+            }
+          } catch {
+            // Projects fetch is optional, continue without them
+          }
+
+          return {
+            conversations: conversationsData,
+            projects: projectsData,
+          };
         },
-        { url: apiUrl, token: accessToken }
+        { conversationsUrl, projectsUrl, token: accessToken }
       );
 
       await page.close();
 
       // Parse API response
-      const conversations = response.items || [];
+      const conversations = response.conversations?.items || [];
 
       if (!Array.isArray(conversations)) {
         throw new Error('Unexpected API response format');
@@ -197,6 +223,35 @@ export class ChatGPTProvider extends BaseProvider {
         hasMedia: false, // Will be determined when fetching full conversation
         preview: undefined,
       }));
+
+      // Extract conversations from projects/gizmos
+      if (response.projects?.items) {
+        for (const item of response.projects.items) {
+          const gizmo = item.gizmo?.gizmo;
+          const projectName = gizmo?.display?.name || 'Untitled Project';
+          const projectConversations = item.conversations?.items || [];
+
+          if (Array.isArray(projectConversations)) {
+            for (const conv of projectConversations) {
+              // Check if this conversation is already in the list (avoid duplicates)
+              if (!summaries.find((c) => c.id === conv.id)) {
+                // Store the project mapping for later use in fetchConversation
+                this.conversationProjects.set(conv.id, projectName);
+
+                summaries.push({
+                  id: conv.id,
+                  title: conv.title || 'Untitled',
+                  messageCount: 0,
+                  createdAt: new Date(conv.create_time * 1000),
+                  updatedAt: new Date(conv.update_time * 1000),
+                  hasMedia: false,
+                  preview: `Project: ${projectName}`,
+                });
+              }
+            }
+          }
+        }
+      }
 
       // Apply filters
       if (options.since) {
@@ -300,12 +355,85 @@ export class ChatGPTProvider extends BaseProvider {
         const content = parts.filter((p: any) => typeof p === 'string').join('\n');
 
         if (content) {
+          // Extract attachments from message metadata
+          const attachments: any[] = [];
+
+          // Check for image/video/document attachments
+          if (msg.metadata?.attachments) {
+            for (const att of msg.metadata.attachments) {
+              // Try multiple URL fields and skip internal protocol URLs
+              const possibleUrl =
+                att.download_url || // Prefer download_url
+                att.url || // Then url
+                att.download_link || // Alternative field
+                att.fileDownloadUrl || // Alternative field
+                '';
+
+              // Skip internal protocol URLs - these aren't downloadable
+              // file-service:// - internal file references
+              // sediment:// - internal content storage
+              if (
+                possibleUrl.startsWith('file-service://') ||
+                possibleUrl.startsWith('sediment://')
+              ) {
+                continue;
+              }
+
+              // Only add attachments with valid download URLs
+              if (!possibleUrl || possibleUrl.trim() === '') {
+                continue;
+              }
+
+              if (att.mimeType?.startsWith('image/')) {
+                attachments.push({
+                  id: att.id || `${node.id}-${attachments.length}`,
+                  type: 'image',
+                  url: possibleUrl,
+                  mimeType: att.mimeType,
+                  size: att.size,
+                });
+              } else if (att.mimeType?.startsWith('video/')) {
+                attachments.push({
+                  id: att.id || `${node.id}-${attachments.length}`,
+                  type: 'video',
+                  url: possibleUrl,
+                  mimeType: att.mimeType,
+                  size: att.size,
+                });
+              } else {
+                // Other file types
+                attachments.push({
+                  id: att.id || `${node.id}-${attachments.length}`,
+                  type: 'document',
+                  url: possibleUrl,
+                  mimeType: att.mimeType,
+                  size: att.size,
+                });
+              }
+            }
+          }
+
+          // Check for DALL-E images in content parts
+          for (const part of parts) {
+            if (typeof part === 'object' && part.content_type === 'image_asset_pointer') {
+              attachments.push({
+                id: part.asset_pointer || `${node.id}-dalle-${attachments.length}`,
+                type: 'image',
+                url: part.metadata?.dalle?.prompt || '',
+                metadata: {
+                  dallePrompt: part.metadata?.dalle?.prompt,
+                  dalleGenId: part.metadata?.dalle?.gen_id,
+                },
+              });
+            }
+          }
+
           messages.push({
             id: msg.id || node.id,
             role,
             content,
             timestamp: msg.create_time ? new Date(msg.create_time * 1000) : new Date(),
-            attachments: undefined, // TODO: Extract attachments if needed
+            attachments: attachments.length > 0 ? attachments : undefined,
           });
         }
       }

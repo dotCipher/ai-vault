@@ -35,16 +35,58 @@ export async function loadConfig(): Promise<Config> {
     };
   }
 
-  const content = await fs.readFile(CONFIG_FILE, 'utf-8');
-  return JSON.parse(content);
+  try {
+    const content = await fs.readFile(CONFIG_FILE, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    // If config is corrupted (e.g., from interrupted write), try to recover from backup
+    const backupFile = `${CONFIG_FILE}.backup`;
+    if (existsSync(backupFile)) {
+      console.warn('Config file corrupted, restoring from backup...');
+      try {
+        const backupContent = await fs.readFile(backupFile, 'utf-8');
+        const config = JSON.parse(backupContent);
+        // Restore the backup to main config
+        await fs.writeFile(CONFIG_FILE, backupContent, 'utf-8');
+        return config;
+      } catch {
+        console.error('Backup file also corrupted. Creating fresh config.');
+      }
+    }
+
+    // If no backup or backup is also corrupted, start fresh
+    console.error('Config file corrupted and no valid backup found. Creating fresh config.');
+    return {
+      version: '1.0.0',
+      providers: {},
+    };
+  }
 }
 
 /**
- * Save configuration to disk
+ * Save configuration to disk (atomic write with backup)
  */
 export async function saveConfig(config: Config): Promise<void> {
   await fs.mkdir(CONFIG_DIR, { recursive: true });
-  await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+
+  // Create backup of existing config before overwriting
+  if (existsSync(CONFIG_FILE)) {
+    const backupFile = `${CONFIG_FILE}.backup`;
+    try {
+      await fs.copyFile(CONFIG_FILE, backupFile);
+    } catch (error) {
+      // Backup failed, but continue anyway
+      console.warn('Failed to create config backup:', error);
+    }
+  }
+
+  // Atomic write: write to temp file, then rename
+  // This ensures the config is never corrupted even if interrupted (Ctrl+C)
+  const tempFile = `${CONFIG_FILE}.tmp`;
+  const content = JSON.stringify(config, null, 2);
+
+  await fs.writeFile(tempFile, content, 'utf-8');
+  await fs.rename(tempFile, CONFIG_FILE);
 }
 
 /**

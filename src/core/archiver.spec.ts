@@ -67,6 +67,7 @@ describe('Archiver', () => {
     mockStorage = {
       saveConversation: vi.fn().mockResolvedValue(undefined),
       conversationExists: vi.fn().mockResolvedValue(false),
+      getConversation: vi.fn().mockResolvedValue(null),
       getStats: vi.fn().mockResolvedValue({
         totalConversations: 10,
         totalMessages: 50,
@@ -257,6 +258,11 @@ describe('Archiver', () => {
         .mockResolvedValueOnce(false) // conv-2 doesn't exist
         .mockResolvedValueOnce(false); // conv-3 doesn't exist
 
+      // Mock getConversation to return a conversation with the same updatedAt timestamp
+      // This means the local version is up-to-date and should be skipped
+      const existingConv = createMockConversation('conv-1');
+      mockStorage.getConversation.mockResolvedValueOnce(existingConv);
+
       const options: ArchiveOptions = {
         provider: 'test-provider',
         skipExisting: true,
@@ -265,9 +271,36 @@ describe('Archiver', () => {
       const result = await archiver.archive(mockProvider, options);
 
       expect(mockStorage.conversationExists).toHaveBeenCalledTimes(3);
+      expect(mockStorage.getConversation).toHaveBeenCalledTimes(1); // Only for conv-1
       expect(mockProvider.fetchConversation).toHaveBeenCalledTimes(2); // Only non-existing
       expect(result.conversationsSkipped).toBe(1);
       expect(result.conversationsArchived).toBe(2);
+    });
+
+    it('should re-archive conversations when remote has been updated', async () => {
+      mockStorage.conversationExists
+        .mockResolvedValueOnce(true) // conv-1 exists
+        .mockResolvedValueOnce(false) // conv-2 doesn't exist
+        .mockResolvedValueOnce(false); // conv-3 doesn't exist
+
+      // Mock getConversation to return a conversation with an older updatedAt timestamp
+      // This means the remote version is newer and should be re-archived
+      const oldConv = createMockConversation('conv-1');
+      oldConv.updatedAt = new Date('2024-12-01'); // Older than remote (2025-01-01)
+      mockStorage.getConversation.mockResolvedValueOnce(oldConv);
+
+      const options: ArchiveOptions = {
+        provider: 'test-provider',
+        skipExisting: true,
+      };
+
+      const result = await archiver.archive(mockProvider, options);
+
+      expect(mockStorage.conversationExists).toHaveBeenCalledTimes(3);
+      expect(mockStorage.getConversation).toHaveBeenCalledTimes(1); // Only for conv-1
+      expect(mockProvider.fetchConversation).toHaveBeenCalledTimes(3); // All three (conv-1 re-archived)
+      expect(result.conversationsSkipped).toBe(0); // Nothing skipped
+      expect(result.conversationsArchived).toBe(3); // All three archived
     });
 
     it('should download media when downloadMedia is true', async () => {

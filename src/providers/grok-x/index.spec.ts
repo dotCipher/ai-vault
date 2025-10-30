@@ -1,12 +1,5 @@
 /**
  * Grok X Provider Tests
- *
- * TODO: These tests need to be updated to reflect the grok-x provider changes.
- * Tests are currently skipped and need to be updated to:
- * - Use GrokXProvider instead of GrokProvider
- * - Update provider name from 'grok' to 'grok-x'
- * - Update URLs from grok.com to x.com/i/grok
- * - Remove API key authentication tests (cookies only)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -46,7 +39,7 @@ function mockBrowserScraper(mockPage: any) {
   return { mockScraper };
 }
 
-describe.skip('GrokXProvider', () => {
+describe('GrokXProvider', () => {
   let provider: GrokXProvider;
 
   beforeEach(() => {

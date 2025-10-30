@@ -43,11 +43,16 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 - **Native Import Support** - Import from official platform exports (Grok, ChatGPT, Claude)
 - **ZIP Import** - Import directly from ZIP files or unpacked directories
 - **Auto-Detection** - Automatically detects provider from export format
-- **Complete Media Preservation** - Imports images, DALL-E generations, audio, video files
-- **Incremental Backups** - Only fetch new/updated conversations
-- **Media Deduplication** - Don't store the same image twice
+- **Complete Media Preservation** - Imports images, DALL-E generations, audio, video, documents
+- **Assets Library Archiving** - Captures standalone assets (Grok images, docs, code files, etc.)
+- **Workspaces & Projects** - Archives Grok workspaces with projects, code files, and metadata
+- **Smart Diff Archiving** - Automatically detects and re-archives updated conversations via timestamp comparison
+- **Incremental Backups** - Only fetch new/updated conversations, skip unchanged ones
+- **Status Checking** - Preview what's new or updated before archiving
+- **Media Deduplication** - Don't store the same image twice (SHA-256 based)
 - **Flexible Scheduling** - Daily, weekly, or custom cron expressions
 - **Rich Export Formats** - JSON + Markdown for maximum compatibility
+- **Hierarchical Organization** - Provider-agnostic folder structure preserves relationships
 - **Automatic Cookie Management** - Extract session cookies from your browser
 - **Filtering & Targeting** - Date ranges, conversation importance, custom queries
 
@@ -169,6 +174,10 @@ ai-vault setup
 ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
 
 # Option 2: Archive via automated scraping
+# Check what's new or updated first
+ai-vault status
+
+# Archive all new and updated conversations
 ai-vault archive
 
 # Schedule automated backups
@@ -236,6 +245,29 @@ ai-vault archive --skip-media
 # Dry run (see what would be archived)
 ai-vault archive --dry-run
 ```
+
+### Check Archive Status
+
+Preview what's new or updated before archiving:
+
+```bash
+# Check status for all configured platforms
+ai-vault status
+
+# Check specific platform
+ai-vault status --provider chatgpt
+
+# Check with filters
+ai-vault status --since 2025-01-01 --limit 50
+```
+
+The status command shows:
+
+- **New conversations** not yet archived (marked with +)
+- **Updated conversations** that changed remotely since last archive (marked with ○)
+- **Already archived** conversations that are up-to-date (marked with ✓)
+
+This helps you preview what will be downloaded before running `ai-vault archive`.
 
 ### Import from Native Exports
 
@@ -369,6 +401,26 @@ ai-vault list --search "machine learning"
 │   │   └── conv-123/
 │   │       ├── conversation.json
 │   │       └── conversation.md
+│   ├── assets/        # Assets library (images, docs, code, etc.)
+│   │   ├── assets-index.json
+│   │   └── by-type/
+│   │       ├── image/
+│   │       ├── video/
+│   │       ├── audio/
+│   │       ├── document/
+│   │       ├── code/
+│   │       └── data/
+│   ├── workspaces/    # Workspaces and projects
+│   │   ├── workspaces-index.json
+│   │   └── workspace-123/
+│   │       ├── workspace.json
+│   │       ├── workspace.md
+│   │       └── projects/
+│   │           └── project-456/
+│   │               ├── project.json
+│   │               ├── project.md
+│   │               └── files/
+│   │                   └── code-file.py
 │   ├── media/
 │   │   ├── images/
 │   │   ├── videos/
@@ -380,6 +432,15 @@ ai-vault list --search "machine learning"
 ├── chatgpt/
 └── claude/
 ```
+
+**Structure Explanation:**
+
+- **conversations/**: Chat conversations with full message history
+- **assets/**: Standalone assets library organized by type (images, documents, code, etc.)
+- **workspaces/**: Grok workspaces containing projects with code, files, and metadata
+- **media/**: Downloaded media files (images, videos, documents) with deduplication
+- **index.json**: Quick lookup index for conversations
+- **media-registry.json**: Tracks media files and prevents duplicates
 
 ### Customizing Archive Directory
 
@@ -486,16 +547,26 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
   - [x] **ChatGPT**: Import from official OpenAI exports with media
 - [x] Grok provider - two separate implementations:
   - [x] **grok-web**: Standalone grok.com (cookies + scraping)
+    - [x] Conversation archiving with full message history
+    - [x] Assets library archiving (images, documents, code, etc.)
+    - [x] Workspaces and projects archiving with file preservation
   - [x] **grok-x**: X-integrated Grok at x.com/grok (cookies + scraping)
 - [x] ChatGPT provider:
   - [x] **Native import**: From conversations.json exports
-  - [x] **Web scraping**: Cookie-based authentication
-  - [x] **Media import**: Images, DALL-E generations, audio files
+  - [x] **Web scraping**: Cookie-based authentication via backend API
+  - [x] **Media support**: Images (uploaded & DALL-E), videos, documents
+  - [x] **Backend API integration**: Reliable conversation fetching with full attachment metadata
 - [x] Smart filtering system:
   - [x] Date range filtering (since/until)
   - [x] Search query filtering (title/preview)
   - [x] Conversation limit controls
   - [x] List command for browsing before archiving
+  - [x] Status command for previewing changes before archiving
+- [x] Smart diff archiving:
+  - [x] Timestamp-based change detection (platform-agnostic)
+  - [x] Automatic re-archiving of updated conversations
+  - [x] Skip unchanged conversations for efficiency
+  - [x] 1-second tolerance for timestamp rounding
 - [x] Scheduling system:
   - [x] Platform-agnostic (cron on Unix, Task Scheduler on Windows)
   - [x] Full CRUD operations (add, list, remove, enable, disable)
@@ -518,7 +589,6 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 - [ ] Web UI for browsing and exploring archives
 - [ ] Conversation analytics and insights
 - [ ] Automatic tagging and categorization
-- [ ] Differential sync (only download changes)
 
 ## 📄 License
 
