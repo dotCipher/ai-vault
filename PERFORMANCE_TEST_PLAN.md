@@ -28,6 +28,22 @@ pnpm run build
 pnpm link --global
 ```
 
+### Authentication Setup
+
+If you encounter 401 authentication errors during testing, you'll need to re-authenticate:
+
+```bash
+# Run the interactive setup wizard
+ai-vault setup
+
+# Follow the prompts to:
+# 1. Select your provider (Grok, ChatGPT, etc.)
+# 2. Enter authentication credentials (cookies or API key)
+# 3. Verify authentication
+```
+
+**Note:** Browser cookies expire over time. If you see "API request failed: 401", just run `ai-vault setup` again to refresh your credentials.
+
 ## Test Suite
 
 ### Test 1: Unit Tests
