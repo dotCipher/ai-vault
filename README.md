@@ -246,6 +246,8 @@ ai-vault archive --skip-media
 ai-vault archive --dry-run
 ```
 
+**Performance**: AI Vault automatically uses parallel processing with smart concurrency based on your hardware and provider constraints. Typical performance is 3-10x faster than sequential processing.
+
 ### Check Archive Status
 
 Preview what's new or updated before archiving:

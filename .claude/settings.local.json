@@ -10,7 +10,10 @@
       "Bash(npm run typecheck:*)",
       "Bash(npm run build:*)",
       "Bash(ssh-add:*)",
-      "Read(//Users/codymoore/.ssh/**)"
+      "Read(//Users/codymoore/.ssh/**)",
+      "Bash(npm install:*)",
+      "Bash(cat:*)",
+      "Bash(pnpm add:*)"
     ],
     "deny": [],
     "ask": []

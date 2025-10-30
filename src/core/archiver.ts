@@ -11,6 +11,8 @@ import { MediaManager } from './media.js';
 import type { ArchiveOptions, ArchiveResult } from '../types/storage.js';
 import ora from 'ora';
 import chalk from 'chalk';
+import pLimit from 'p-limit';
+import os from 'os';
 
 export class Archiver {
   private storage: Storage;
@@ -117,108 +119,159 @@ export class Archiver {
 
       console.log(chalk.cyan(`\nArchiving ${conversationsToArchive.length} conversations...\n`));
 
-      // Step 2: Archive each conversation
-      for (let i = 0; i < conversationsToArchive.length; i++) {
-        const summary = conversationsToArchive[i];
-        const progress = `[${i + 1}/${conversationsToArchive.length}]`;
+      // Calculate smart concurrency based on hardware and provider constraints
+      const concurrency = this.calculateOptimalConcurrency(provider, options.concurrency);
+      const limit = pLimit(concurrency);
+      console.log(chalk.gray(`Processing with concurrency: ${concurrency}\n`));
 
-        try {
-          // Check if already exists and if it needs updating (smart diff)
-          const exists = await this.storage.conversationExists(provider.name, summary.id);
+      // Track progress
+      let completed = 0;
+      const total = conversationsToArchive.length;
 
-          if (exists && options.skipExisting) {
-            // Get local conversation to compare timestamps
-            const localConv = await this.storage.getConversation(provider.name, summary.id);
+      // Step 2: Archive conversations in parallel with concurrency control
+      const archiveTasks = conversationsToArchive.map((summary, index) =>
+        limit(async () => {
+          const progress = `[${index + 1}/${total}]`;
 
-            if (localConv) {
-              const localUpdated = new Date(localConv.updatedAt).getTime();
-              const remoteUpdated = summary.updatedAt.getTime();
+          try {
+            // Check if already exists and if it needs updating (smart diff)
+            const exists = await this.storage.conversationExists(provider.name, summary.id);
 
-              // Skip only if local is up-to-date (within 1 second tolerance for rounding)
-              if (remoteUpdated <= localUpdated + 1000) {
-                console.log(chalk.gray(`${progress} Skipped: ${summary.title} (up-to-date)`));
-                result.conversationsSkipped++;
-                continue;
+            if (exists && options.skipExisting) {
+              // Get local conversation to compare timestamps
+              const localConv = await this.storage.getConversation(provider.name, summary.id);
+
+              if (localConv) {
+                const localUpdated = new Date(localConv.updatedAt).getTime();
+                const remoteUpdated = summary.updatedAt.getTime();
+
+                // Skip only if local is up-to-date (within 1 second tolerance for rounding)
+                if (remoteUpdated <= localUpdated + 1000) {
+                  completed++;
+                  console.log(
+                    chalk.gray(
+                      `${progress} [${completed}/${total}] Skipped: ${summary.title} (up-to-date)`
+                    )
+                  );
+                  return { status: 'skipped' as const, summary };
+                }
+
+                // Remote is newer - re-archive it
+                console.log(
+                  chalk.yellow(`${progress} Re-archiving: ${summary.title} (updated remotely)`)
+                );
               }
-
-              // Remote is newer - re-archive it
-              console.log(
-                chalk.yellow(`${progress} Re-archiving: ${summary.title} (updated remotely)`)
-              );
             }
-          }
 
-          // Fetch full conversation
-          const fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
-          const conversation = await provider.fetchConversation(summary.id);
-          fetchSpinner.succeed(`${progress} Fetched: ${conversation.title}`);
+            // Fetch full conversation
+            const fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
+            const conversation = await provider.fetchConversation(summary.id);
+            fetchSpinner.succeed(`${progress} Fetched: ${conversation.title}`);
 
-          // Dry run check
-          if (options.dryRun) {
-            console.log(chalk.yellow(`${progress} [DRY RUN] Would archive: ${conversation.title}`));
-            result.conversationsArchived++;
-            continue;
-          }
+            // Dry run check
+            if (options.dryRun) {
+              completed++;
+              console.log(
+                chalk.yellow(
+                  `${progress} [${completed}/${total}] [DRY RUN] Would archive: ${conversation.title}`
+                )
+              );
+              return { status: 'archived' as const, summary, conversation };
+            }
 
-          // Save conversation
-          await this.storage.saveConversation(conversation);
-          result.conversationsArchived++;
+            // Save conversation
+            await this.storage.saveConversation(conversation);
 
-          // Download media if requested
-          if (options.downloadMedia !== false && conversation.metadata.mediaCount > 0) {
-            const mediaSpinner = ora(
-              `${progress} Downloading ${conversation.metadata.mediaCount} media files...`
-            ).start();
+            // Download media if requested
+            let mediaResult = null;
+            if (options.downloadMedia !== false && conversation.metadata.mediaCount > 0) {
+              const mediaSpinner = ora(
+                `${progress} Downloading ${conversation.metadata.mediaCount} media files...`
+              ).start();
 
-            // Get cookies from provider if available (needed for authenticated media downloads)
-            const providerCookies = (provider as any).config?.cookies;
+              // Get cookies from provider if available (needed for authenticated media downloads)
+              const providerCookies = (provider as any).config?.cookies;
 
-            const mediaResult = await this.mediaManager.downloadConversationMedia(
+              mediaResult = await this.mediaManager.downloadConversationMedia(
+                conversation,
+                (current, mediaTotal) => {
+                  mediaSpinner.text = `${progress} Downloading media: ${current}/${mediaTotal}`;
+                },
+                providerCookies
+              );
+
+              if (mediaResult.failed > 0) {
+                mediaSpinner.warn(
+                  `${progress} Downloaded ${mediaResult.downloaded}/${conversation.metadata.mediaCount} media files (${mediaResult.failed} failed)`
+                );
+              } else {
+                const skippedText =
+                  mediaResult.skipped > 0 ? ` (${mediaResult.skipped} already existed)` : '';
+                mediaSpinner.succeed(
+                  `${progress} Downloaded ${mediaResult.downloaded} media files${skippedText}`
+                );
+              }
+            }
+
+            completed++;
+            console.log(
+              chalk.green(`${progress} [${completed}/${total}] ✓ Archived: ${conversation.title}\n`)
+            );
+            return {
+              status: 'archived' as const,
+              summary,
               conversation,
-              (current, total) => {
-                mediaSpinner.text = `${progress} Downloading media: ${current}/${total}`;
-              },
-              providerCookies
+              mediaResult,
+            };
+          } catch (error) {
+            completed++;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.log(
+              chalk.red(
+                `${progress} [${completed}/${total}] ✗ Failed: ${summary.title} - ${errorMessage}\n`
+              )
             );
 
-            result.mediaDownloaded += mediaResult.downloaded;
-            result.mediaSkipped += mediaResult.skipped;
-            result.bytesDownloaded += mediaResult.bytes;
+            return {
+              status: 'failed' as const,
+              summary,
+              error: error instanceof Error ? error : new Error(errorMessage),
+            };
+          }
+        })
+      );
 
-            if (mediaResult.failed > 0) {
-              mediaSpinner.warn(
-                `${progress} Downloaded ${mediaResult.downloaded}/${conversation.metadata.mediaCount} media files (${mediaResult.failed} failed)`
-              );
+      // Wait for all tasks to complete
+      const results = await Promise.all(archiveTasks);
 
-              // Add media errors and log them for debugging
-              for (const error of mediaResult.errors) {
-                console.log(chalk.red(`  Media download failed: ${error.url}`));
-                console.log(chalk.gray(`  Error: ${error.error}`));
-                result.errors.push({
-                  id: summary.id,
-                  type: 'media',
-                  message: `Failed to download ${error.url}: ${error.error}`,
-                });
-              }
-            } else {
-              const skippedText =
-                mediaResult.skipped > 0 ? ` (${mediaResult.skipped} already existed)` : '';
-              mediaSpinner.succeed(
-                `${progress} Downloaded ${mediaResult.downloaded} media files${skippedText}`
-              );
+      // Aggregate results
+      for (const taskResult of results) {
+        if (taskResult.status === 'archived') {
+          result.conversationsArchived++;
+          if (taskResult.mediaResult) {
+            result.mediaDownloaded += taskResult.mediaResult.downloaded;
+            result.mediaSkipped += taskResult.mediaResult.skipped;
+            result.bytesDownloaded += taskResult.mediaResult.bytes;
+
+            // Add media errors
+            for (const error of taskResult.mediaResult.errors) {
+              console.log(chalk.red(`  Media download failed: ${error.url}`));
+              console.log(chalk.gray(`  Error: ${error.error}`));
+              result.errors.push({
+                id: taskResult.summary.id,
+                type: 'media',
+                message: `Failed to download ${error.url}: ${error.error}`,
+              });
             }
           }
-
-          console.log(chalk.green(`${progress} ✓ Archived: ${conversation.title}\n`));
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.log(chalk.red(`${progress} ✗ Failed: ${summary.title} - ${errorMessage}\n`));
-
+        } else if (taskResult.status === 'skipped') {
+          result.conversationsSkipped++;
+        } else if (taskResult.status === 'failed') {
           result.errors.push({
-            id: summary.id,
+            id: taskResult.summary.id,
             type: 'conversation',
-            message: errorMessage,
-            error: error instanceof Error ? error : undefined,
+            message: taskResult.error.message,
+            error: taskResult.error,
           });
         }
       }
@@ -238,6 +291,34 @@ export class Archiver {
     this.printSummary(result, options.dryRun || false);
 
     return result;
+  }
+
+  /**
+   * Calculate optimal concurrency based on hardware and provider constraints
+   */
+  private calculateOptimalConcurrency(provider: Provider, override?: number): number {
+    // If user provides override, use it
+    if (override !== undefined) {
+      return Math.max(1, Math.min(override, 20)); // Clamp between 1-20
+    }
+
+    // Get CPU count as base metric
+    const cpuCount = os.cpus().length;
+
+    // Provider-specific limits
+    const providerLimit = provider.rateLimit?.maxConcurrent;
+
+    // Calculate smart default
+    // Conservative: Use 50% of CPU cores, min 2, max 10
+    let optimalConcurrency = Math.max(2, Math.floor(cpuCount * 0.5));
+    optimalConcurrency = Math.min(optimalConcurrency, 10);
+
+    // Respect provider limits if specified
+    if (providerLimit !== undefined) {
+      optimalConcurrency = Math.min(optimalConcurrency, providerLimit);
+    }
+
+    return optimalConcurrency;
   }
 
   /**
