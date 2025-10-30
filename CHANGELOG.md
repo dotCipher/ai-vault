@@ -1,3 +1,9 @@
+# [1.10.0](https://github.com/dotCipher/ai-vault/compare/v1.9.0...v1.10.0) (2025-10-30)
+
+### Features
+
+- performance optimizations (30-300x faster archiving) ([#8](https://github.com/dotCipher/ai-vault/issues/8)) ([e418319](https://github.com/dotCipher/ai-vault/commit/e41831905178a98334bbde367249b5b79fb3afd0))
+
 # [1.9.0](https://github.com/dotCipher/ai-vault/compare/v1.8.0...v1.9.0) (2025-10-30)
 
 ### Features
