@@ -1,3 +1,9 @@
+## [1.10.1](https://github.com/dotCipher/ai-vault/compare/v1.10.0...v1.10.1) (2025-10-30)
+
+### Bug Fixes
+
+- show status for all configured providers when none specified ([9497e04](https://github.com/dotCipher/ai-vault/commit/9497e0410180c4b0b26502e09b3785b4111f28a6))
+
 # [1.10.0](https://github.com/dotCipher/ai-vault/compare/v1.9.0...v1.10.0) (2025-10-30)
 
 ### Features
