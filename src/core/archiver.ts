@@ -119,6 +119,11 @@ export class Archiver {
 
       console.log(chalk.cyan(`\nArchiving ${conversationsToArchive.length} conversations...\n`));
 
+      // Enable batch mode for storage operations (deferred index updates)
+      if (!options.dryRun) {
+        this.storage.enableBatchMode();
+      }
+
       // Calculate smart concurrency based on hardware and provider constraints
       const concurrency = this.calculateOptimalConcurrency(provider, options.concurrency);
       const limit = pLimit(concurrency);
@@ -243,6 +248,11 @@ export class Archiver {
 
       // Wait for all tasks to complete
       const results = await Promise.all(archiveTasks);
+
+      // Flush any pending storage updates (batch save index)
+      if (!options.dryRun) {
+        await this.storage.disableBatchMode();
+      }
 
       // Aggregate results
       for (const taskResult of results) {

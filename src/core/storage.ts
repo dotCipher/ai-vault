@@ -13,9 +13,61 @@ import type { StorageConfig, ExportFormat, ConversationIndex } from '../types/st
 
 export class Storage {
   private config: StorageConfig;
+  private batchMode: boolean = false;
+  private pendingIndexUpdates: Map<string, Map<string, ConversationIndex[string]>> = new Map();
 
   constructor(config: StorageConfig) {
     this.config = config;
+  }
+
+  /**
+   * Enable batch mode for improved performance when saving multiple conversations
+   * In batch mode, index updates are queued in memory and saved in a single operation
+   */
+  enableBatchMode(): void {
+    this.batchMode = true;
+    this.pendingIndexUpdates.clear();
+  }
+
+  /**
+   * Disable batch mode and flush any pending updates
+   */
+  async disableBatchMode(): Promise<void> {
+    await this.flushPendingUpdates();
+    this.batchMode = false;
+  }
+
+  /**
+   * Flush all pending index updates to disk
+   */
+  async flushPendingUpdates(): Promise<void> {
+    if (!this.batchMode || this.pendingIndexUpdates.size === 0) {
+      return;
+    }
+
+    // Process each provider's pending updates
+    for (const [provider, updates] of this.pendingIndexUpdates.entries()) {
+      const indexPath = path.join(this.config.baseDir, provider, 'index.json');
+
+      // Load existing index
+      let index: ConversationIndex = {};
+      if (existsSync(indexPath)) {
+        const content = await fs.readFile(indexPath, 'utf-8');
+        index = JSON.parse(content);
+      }
+
+      // Apply all pending updates
+      for (const [conversationId, entry] of updates.entries()) {
+        index[conversationId] = entry;
+      }
+
+      // Save updated index
+      await fs.mkdir(path.dirname(indexPath), { recursive: true });
+      await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    }
+
+    // Clear pending updates
+    this.pendingIndexUpdates.clear();
   }
 
   /**
@@ -174,20 +226,10 @@ export class Storage {
   }
 
   /**
-   * Update conversation index
+   * Update conversation index (batched if in batch mode, immediate otherwise)
    */
   private async updateIndex(conversation: Conversation, conversationPath: string): Promise<void> {
-    const indexPath = path.join(this.config.baseDir, conversation.provider, 'index.json');
-
-    // Load existing index or create new one
-    let index: ConversationIndex = {};
-    if (existsSync(indexPath)) {
-      const content = await fs.readFile(indexPath, 'utf-8');
-      index = JSON.parse(content);
-    }
-
-    // Add/update conversation entry
-    index[conversation.id] = {
+    const indexEntry = {
       title: conversation.title,
       provider: conversation.provider,
       messageCount: conversation.messages.length,
@@ -199,8 +241,29 @@ export class Storage {
       path: path.relative(path.join(this.config.baseDir, conversation.provider), conversationPath),
     };
 
-    // Save index
-    await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    if (this.batchMode) {
+      // Queue update for later batch save
+      if (!this.pendingIndexUpdates.has(conversation.provider)) {
+        this.pendingIndexUpdates.set(conversation.provider, new Map());
+      }
+      this.pendingIndexUpdates.get(conversation.provider)!.set(conversation.id, indexEntry);
+    } else {
+      // Immediate save (legacy behavior)
+      const indexPath = path.join(this.config.baseDir, conversation.provider, 'index.json');
+
+      // Load existing index or create new one
+      let index: ConversationIndex = {};
+      if (existsSync(indexPath)) {
+        const content = await fs.readFile(indexPath, 'utf-8');
+        index = JSON.parse(content);
+      }
+
+      // Add/update conversation entry
+      index[conversation.id] = indexEntry;
+
+      // Save index
+      await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    }
   }
 
   /**
