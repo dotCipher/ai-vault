@@ -43,23 +43,48 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
   try {
     const config = await loadConfig();
 
-    // Determine which provider to use
-    const providerName: ProviderName =
-      (options.provider as ProviderName) || (Object.keys(config.providers)[0] as ProviderName);
+    // Determine which providers to check
+    const providerNames: ProviderName[] = options.provider
+      ? [options.provider as ProviderName]
+      : (Object.keys(config.providers) as ProviderName[]);
 
-    if (!providerName) {
-      console.error(chalk.red('No provider specified. Run `ai-vault setup` first.'));
+    if (providerNames.length === 0) {
+      console.error(chalk.red('No providers configured. Run `ai-vault setup` first.'));
       process.exit(1);
     }
 
-    const providerConfig = config.providers[providerName];
-    if (!providerConfig) {
-      console.error(
-        chalk.red(`Provider '${providerName}' not configured. Run 'ai-vault setup' first.`)
-      );
-      process.exit(1);
-    }
+    // Check status for each provider
+    for (let i = 0; i < providerNames.length; i++) {
+      const providerName = providerNames[i];
+      const providerConfig = config.providers[providerName];
 
+      if (!providerConfig) {
+        console.error(
+          chalk.red(`Provider '${providerName}' not configured. Run 'ai-vault setup' first.`)
+        );
+        continue;
+      }
+
+      // Add spacing between multiple providers
+      if (i > 0) {
+        console.log('\n\n');
+      }
+
+      await checkProviderStatus(providerName, providerConfig, config, options);
+    }
+  } catch (error: any) {
+    console.error(chalk.red('\n✗ Error:'), error.message);
+    process.exit(1);
+  }
+}
+
+async function checkProviderStatus(
+  providerName: ProviderName,
+  providerConfig: any,
+  config: any,
+  options: StatusOptions
+): Promise<void> {
+  try {
     // Initialize provider
     const spinner = ora(`Connecting to ${providerName}...`).start();
     const provider = getProvider(providerName);
@@ -234,7 +259,7 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
       await provider.cleanup();
     }
   } catch (error: any) {
-    console.error(chalk.red('\n✗ Error:'), error.message);
-    process.exit(1);
+    console.error(chalk.red(`\n✗ Error (${providerName}):`, error.message));
+    // Don't exit - continue with other providers
   }
 }
