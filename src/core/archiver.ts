@@ -9,6 +9,8 @@ import type { Provider } from '../types/provider.js';
 import { Storage, getDefaultStorageConfig } from './storage.js';
 import { MediaManager } from './media.js';
 import type { ArchiveOptions, ArchiveResult } from '../types/storage.js';
+import { RateLimitError } from '../types/provider.js';
+import { RateLimiter } from '../utils/rate-limiter.js';
 import ora from 'ora';
 import chalk from 'chalk';
 import pLimit from 'p-limit';
@@ -125,9 +127,19 @@ export class Archiver {
       }
 
       // Calculate smart concurrency based on hardware and provider constraints
-      const concurrency = this.calculateOptimalConcurrency(provider, options.concurrency);
-      const limit = pLimit(concurrency);
-      console.log(chalk.gray(`Processing with concurrency: ${concurrency}\n`));
+      const initialConcurrency = this.calculateOptimalConcurrency(provider, options.concurrency);
+
+      // Initialize rate limiter for adaptive concurrency
+      const rateLimiter = new RateLimiter({
+        initialConcurrency,
+        minConcurrency: 1,
+        maxConcurrency: initialConcurrency,
+        baseDelay: 2000,
+        maxDelay: 60000,
+      });
+
+      const limit = pLimit(initialConcurrency);
+      console.log(chalk.gray(`Processing with concurrency: ${initialConcurrency}\n`));
 
       // Track progress
       let completed = 0;
@@ -137,6 +149,14 @@ export class Archiver {
       const archiveTasks = conversationsToArchive.map((summary, index) =>
         limit(async () => {
           const progress = `[${index + 1}/${total}]`;
+
+          // Check circuit breaker before attempting operation
+          if (rateLimiter.isCircuitOpen()) {
+            console.log(
+              chalk.yellow(`${progress} [PAUSED] Rate limit circuit breaker active, waiting...`)
+            );
+            await rateLimiter.waitForBackoff(5000); // Check every 5 seconds
+          }
 
           try {
             // Check if already exists and if it needs updating (smart diff)
@@ -172,6 +192,9 @@ export class Archiver {
             const fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
             const conversation = await provider.fetchConversation(summary.id);
             fetchSpinner.succeed(`${progress} Fetched: ${conversation.title}`);
+
+            // Record successful operation
+            rateLimiter.recordSuccess();
 
             // Dry run check
             if (options.dryRun) {
@@ -230,6 +253,42 @@ export class Archiver {
             };
           } catch (error) {
             completed++;
+
+            // Handle rate limit errors specially
+            if (error instanceof RateLimitError) {
+              const { shouldPause, delay } = rateLimiter.recordRateLimit(error);
+              const newConcurrency = rateLimiter.getConcurrency();
+
+              console.log(
+                chalk.yellow(
+                  `${progress} [${completed}/${total}] ⚠ Rate limited: ${summary.title}`
+                )
+              );
+              console.log(
+                chalk.yellow(
+                  `  Reducing concurrency to ${newConcurrency}, waiting ${Math.floor(delay / 1000)}s...`
+                )
+              );
+
+              if (shouldPause) {
+                console.log(
+                  chalk.red(
+                    `  Circuit breaker activated! Pausing all operations for ${Math.floor(delay / 1000)}s\n`
+                  )
+                );
+              }
+
+              // Wait for backoff period
+              await rateLimiter.waitForBackoff(delay);
+
+              return {
+                status: 'rate-limited' as const,
+                summary,
+                error: error,
+              };
+            }
+
+            // Handle other errors
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.log(
               chalk.red(
@@ -276,6 +335,14 @@ export class Archiver {
           }
         } else if (taskResult.status === 'skipped') {
           result.conversationsSkipped++;
+        } else if (taskResult.status === 'rate-limited') {
+          // Rate-limited conversations should be retried or reported
+          result.errors.push({
+            id: taskResult.summary.id,
+            type: 'conversation',
+            message: `Rate limited: ${taskResult.error.message}`,
+            error: taskResult.error,
+          });
         } else if (taskResult.status === 'failed') {
           result.errors.push({
             id: taskResult.summary.id,
@@ -284,6 +351,21 @@ export class Archiver {
             error: taskResult.error,
           });
         }
+      }
+
+      // Log rate limiter statistics
+      const rateLimiterState = rateLimiter.getState();
+      if (rateLimiterState.rateLimitCount > 0) {
+        console.log(
+          chalk.yellow(
+            `\nRate Limiting Summary: ${rateLimiterState.rateLimitCount} rate limit(s) encountered`
+          )
+        );
+        console.log(
+          chalk.yellow(
+            `Final concurrency: ${rateLimiterState.currentConcurrency} (started at ${initialConcurrency})`
+          )
+        );
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
