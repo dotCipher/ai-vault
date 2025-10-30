@@ -8,7 +8,9 @@
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import http from 'http';
+import https from 'https';
 import crypto from 'crypto';
 import { createWriteStream } from 'fs';
 import type { Conversation, Attachment } from '../types/index.js';
@@ -28,10 +30,37 @@ export class MediaManager {
   private baseDir: string;
   private registryPath: string;
   private registry: MediaRegistry = {};
+  private httpClient?: AxiosInstance;
 
   constructor(baseDir: string) {
     this.baseDir = baseDir;
     this.registryPath = path.join(baseDir, 'media-registry.json');
+  }
+
+  /**
+   * Get or create HTTP client with connection pooling (lazy initialization)
+   */
+  private getHttpClient(): AxiosInstance {
+    if (!this.httpClient) {
+      // Create HTTP client with connection pooling for improved performance
+      this.httpClient = axios.create({
+        timeout: 60000,
+        // Enable connection pooling with keep-alive
+        httpAgent: new http.Agent({
+          keepAlive: true,
+          keepAliveMsecs: 30000,
+          maxSockets: 50,
+          maxFreeSockets: 10,
+        }),
+        httpsAgent: new https.Agent({
+          keepAlive: true,
+          keepAliveMsecs: 30000,
+          maxSockets: 50,
+          maxFreeSockets: 10,
+        }),
+      });
+    }
+    return this.httpClient;
   }
 
   /**
@@ -357,10 +386,10 @@ export class MediaManager {
 
     let response;
     try {
-      response = await axios.get(url, {
+      // Use pooled HTTP client for better performance
+      response = await this.getHttpClient().get(url, {
         responseType: 'stream',
         headers,
-        timeout: 60000,
         validateStatus: (status) => status < 500, // Don't throw on 4xx errors
       });
 
@@ -475,6 +504,22 @@ export class MediaManager {
   private async saveRegistry(): Promise<void> {
     await fs.mkdir(path.dirname(this.registryPath), { recursive: true });
     await fs.writeFile(this.registryPath, JSON.stringify(this.registry, null, 2), 'utf-8');
+  }
+
+  /**
+   * Close HTTP connections (call when done with media manager to free resources)
+   */
+  closeConnections(): void {
+    // Close all keep-alive connections to free resources
+    const httpAgent = this.httpClient?.defaults?.httpAgent as http.Agent;
+    const httpsAgent = this.httpClient?.defaults?.httpsAgent as https.Agent;
+
+    if (httpAgent) {
+      httpAgent.destroy();
+    }
+    if (httpsAgent) {
+      httpsAgent.destroy();
+    }
   }
 
   /**

@@ -8,16 +8,30 @@
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import zlib from 'zlib';
+import { promisify } from 'util';
 import type { Conversation, Asset, Workspace, Project } from '../types/index.js';
 import type { StorageConfig, ExportFormat, ConversationIndex } from '../types/storage.js';
+
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 
 export class Storage {
   private config: StorageConfig;
   private batchMode: boolean = false;
   private pendingIndexUpdates: Map<string, Map<string, ConversationIndex[string]>> = new Map();
+  private useCompression: boolean = false; // Disable compression by default for compatibility
 
   constructor(config: StorageConfig) {
     this.config = config;
+  }
+
+  /**
+   * Enable or disable gzip compression for JSON files
+   * Compression reduces disk usage by ~70-80% but adds minor CPU overhead
+   */
+  setCompression(enabled: boolean): void {
+    this.useCompression = enabled;
   }
 
   /**
@@ -61,9 +75,15 @@ export class Storage {
         index[conversationId] = entry;
       }
 
-      // Save updated index
+      // Save updated index with compression
       await fs.mkdir(path.dirname(indexPath), { recursive: true });
-      await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+
+      if (this.useCompression) {
+        const compressed = await gzip(JSON.stringify(index, null, 2));
+        await fs.writeFile(indexPath + '.gz', compressed);
+      } else {
+        await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      }
     }
 
     // Clear pending updates
@@ -81,9 +101,17 @@ export class Storage {
 
     // Save in all requested formats
     for (const format of this.config.formats) {
-      const filePath = path.join(conversationDir, `conversation.${this.getExtension(format)}`);
+      const extension = this.getExtension(format);
+      const filePath = path.join(conversationDir, `conversation.${extension}`);
       const content = this.formatConversation(conversation, format);
-      await fs.writeFile(filePath, content, 'utf-8');
+
+      // Use compression for JSON files to save disk space
+      if (format === 'json' && this.useCompression) {
+        const compressed = await gzip(content);
+        await fs.writeFile(filePath + '.gz', compressed);
+      } else {
+        await fs.writeFile(filePath, content, 'utf-8');
+      }
     }
 
     // Update index
@@ -118,8 +146,22 @@ export class Storage {
       return null;
     }
 
-    // Try to read the JSON file (most reliable format)
+    // Try to read the JSON file (check both compressed and uncompressed)
     const jsonPath = path.join(conversationDir, 'conversation.json');
+    const jsonGzPath = jsonPath + '.gz';
+
+    // Try compressed first (newer format)
+    if (existsSync(jsonGzPath)) {
+      const compressed = await fs.readFile(jsonGzPath);
+      const decompressed = await gunzip(compressed);
+      const conv = JSON.parse(decompressed.toString('utf-8')) as Conversation;
+      // Ensure dates are Date objects
+      conv.createdAt = new Date(conv.createdAt);
+      conv.updatedAt = new Date(conv.updatedAt);
+      return conv;
+    }
+
+    // Fall back to uncompressed (legacy format)
     if (existsSync(jsonPath)) {
       const content = await fs.readFile(jsonPath, 'utf-8');
       const conv = JSON.parse(content) as Conversation;
@@ -261,8 +303,13 @@ export class Storage {
       // Add/update conversation entry
       index[conversation.id] = indexEntry;
 
-      // Save index
-      await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      // Save index with optional compression
+      if (this.useCompression) {
+        const compressed = await gzip(JSON.stringify(index, null, 2));
+        await fs.writeFile(indexPath + '.gz', compressed);
+      } else {
+        await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      }
     }
   }
 
@@ -271,7 +318,16 @@ export class Storage {
    */
   async getIndex(provider: string): Promise<ConversationIndex> {
     const indexPath = path.join(this.config.baseDir, provider, 'index.json');
+    const indexGzPath = indexPath + '.gz';
 
+    // Try compressed first
+    if (existsSync(indexGzPath)) {
+      const compressed = await fs.readFile(indexGzPath);
+      const decompressed = await gunzip(compressed);
+      return JSON.parse(decompressed.toString('utf-8'));
+    }
+
+    // Fall back to uncompressed
     if (!existsSync(indexPath)) {
       return {};
     }
