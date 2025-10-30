@@ -90,6 +90,84 @@ export interface ConversationMetadata {
   [key: string]: any;
 }
 
+// ========== Assets & Workspaces Types ==========
+
+export interface Asset {
+  id: string;
+  provider: string;
+  name: string;
+  type: 'image' | 'video' | 'audio' | 'document' | 'code' | 'data';
+  url: string;
+  localPath?: string;
+  mimeType?: string;
+  size?: number;
+  createdAt: Date;
+  lastUsedAt?: Date;
+  metadata: AssetMetadata;
+}
+
+export interface AssetMetadata {
+  width?: number;
+  height?: number;
+  duration?: number;
+  description?: string;
+  tags?: string[];
+  [key: string]: any;
+}
+
+export interface Workspace {
+  id: string;
+  provider: string;
+  name: string;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  lastUsedAt?: Date;
+  projects: Project[];
+  metadata: WorkspaceMetadata;
+}
+
+export interface WorkspaceMetadata {
+  color?: string;
+  icon?: string;
+  isDefault?: boolean;
+  projectCount?: number;
+  [key: string]: any;
+}
+
+export interface Project {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+  type?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  lastUsedAt?: Date;
+  content?: string;
+  files?: ProjectFile[];
+  metadata: ProjectMetadata;
+}
+
+export interface ProjectMetadata {
+  language?: string;
+  framework?: string;
+  version?: string;
+  tags?: string[];
+  [key: string]: any;
+}
+
+export interface ProjectFile {
+  path: string;
+  name: string;
+  content: string;
+  language?: string;
+  mimeType?: string;
+  size?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 // ========== Archive Types ==========
 
 export interface ArchiveOptions {

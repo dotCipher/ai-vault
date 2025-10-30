@@ -13,7 +13,16 @@
  */
 
 import { BaseProvider } from '../base.js';
-import type { ProviderConfig, Conversation, Message, Attachment } from '../../types/index.js';
+import type {
+  ProviderConfig,
+  Conversation,
+  Message,
+  Attachment,
+  Asset,
+  Workspace,
+  Project,
+  ProjectFile,
+} from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError, NotFoundError } from '../../types/provider.js';
 import { BrowserScraper, autoScroll } from '../../utils/scraper.js';
@@ -238,24 +247,30 @@ export class GrokWebProvider extends BaseProvider {
           // Image attachments
           if (resp.generatedImageUrls && Array.isArray(resp.generatedImageUrls)) {
             resp.generatedImageUrls.forEach((url: string, idx: number) => {
-              attachments.push({
-                id: `img-${idx}`,
-                type: 'image',
-                url,
-              });
+              const resolvedUrl = this.resolveUrl(url);
+              if (resolvedUrl && resolvedUrl.trim() !== '') {
+                attachments.push({
+                  id: `img-${idx}`,
+                  type: 'image',
+                  url: resolvedUrl,
+                });
+              }
             });
           }
 
           // File attachments
           if (resp.fileAttachments && Array.isArray(resp.fileAttachments)) {
             resp.fileAttachments.forEach((file: any, idx: number) => {
-              attachments.push({
-                id: file.id || `file-${idx}`,
-                type: 'document',
-                url: file.url || '',
-                mimeType: file.mimeType,
-                size: file.size,
-              });
+              const resolvedUrl = this.resolveUrl(file.url || '');
+              if (resolvedUrl && resolvedUrl.trim() !== '') {
+                attachments.push({
+                  id: file.id || `file-${idx}`,
+                  type: 'document',
+                  url: resolvedUrl,
+                  mimeType: file.mimeType,
+                  size: file.size,
+                });
+              }
             });
           }
 
@@ -482,20 +497,22 @@ export class GrokWebProvider extends BaseProvider {
 
           // Extract media attachments (including audio)
           const mediaEls = Array.from(el.querySelectorAll('img, video, audio')) as HTMLElement[];
-          const attachments = mediaEls.map((media: HTMLElement, mediaIdx: number) => {
-            const tagName = media.tagName.toLowerCase();
-            const src =
-              media.getAttribute('src') ||
-              (media as HTMLAudioElement | HTMLVideoElement)
-                .querySelector('source')
-                ?.getAttribute('src') ||
-              '';
-            return {
-              id: `${idx}-${mediaIdx}`,
-              type: tagName as 'image' | 'video' | 'audio',
-              url: src,
-            };
-          });
+          const attachments = mediaEls
+            .map((media: HTMLElement, mediaIdx: number) => {
+              const tagName = media.tagName.toLowerCase();
+              const src =
+                media.getAttribute('src') ||
+                (media as HTMLAudioElement | HTMLVideoElement)
+                  .querySelector('source')
+                  ?.getAttribute('src') ||
+                '';
+              return {
+                id: `${idx}-${mediaIdx}`,
+                type: tagName as 'image' | 'video' | 'audio',
+                url: src,
+              };
+            })
+            .filter((att) => att.url && att.url.trim() !== ''); // Filter out empty URLs
 
           return {
             id: `msg-${idx}`,
@@ -509,6 +526,40 @@ export class GrokWebProvider extends BaseProvider {
         return { title, messages, audioUrls };
       });
 
+      // Download blob/data URLs through browser BEFORE closing page
+      const browserDownloadedMedia: Array<{ originalUrl: string; data: Buffer; mimeType: string }> =
+        [];
+
+      for (const msg of data.messages) {
+        if (msg.attachments) {
+          for (const att of msg.attachments) {
+            // Check if this is a blob or data URL that needs browser download
+            if (att.url.startsWith('blob:') || att.url.startsWith('data:')) {
+              try {
+                const mediaData = await page.evaluate(async (url: string) => {
+                  const response = await fetch(url);
+                  const blob = await response.blob();
+                  const arrayBuffer = await blob.arrayBuffer();
+                  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                  return {
+                    data: base64,
+                    mimeType: blob.type,
+                  };
+                }, att.url);
+
+                browserDownloadedMedia.push({
+                  originalUrl: att.url,
+                  data: Buffer.from(mediaData.data, 'base64'),
+                  mimeType: mediaData.mimeType,
+                });
+              } catch (error) {
+                console.warn(`Failed to download blob/data URL: ${att.url}`, error);
+              }
+            }
+          }
+        }
+      }
+
       await page.close();
 
       // Transform to standard format
@@ -521,33 +572,49 @@ export class GrokWebProvider extends BaseProvider {
           (att): Attachment => ({
             id: att.id,
             type: att.type,
-            url: att.url,
+            url: this.resolveUrl(att.url),
+            metadata: {
+              // Store downloaded blob data if available
+              browserDownloaded: browserDownloadedMedia.find((m) => m.originalUrl === att.url),
+            },
           })
         ),
       }));
 
       // Merge audio URLs from page and network
-      const allAudioUrls = [...(data.audioUrls || []), ...audioUrlsFromNetwork].filter(
-        (url, index, self) => self.indexOf(url) === index
-      ); // Remove duplicates
+      const allAudioUrls = [...(data.audioUrls || []), ...audioUrlsFromNetwork]
+        .filter((url, index, self) => self.indexOf(url) === index) // Remove duplicates
+        .filter((url) => url && url.trim() !== ''); // Remove empty URLs
 
       // If this is a voice conversation with no text messages but has audio URLs,
       // create a synthetic message to hold the audio attachments
       if (messages.length === 0 && allAudioUrls.length > 0) {
-        const audioMessage: Message = {
-          id: 'audio-conversation',
-          role: 'assistant',
-          content: '[Voice conversation - audio files available]',
-          timestamp: apiData?.metadata?.createTime
-            ? new Date(apiData.metadata.createTime)
-            : new Date(),
-          attachments: allAudioUrls.map((url: string, idx: number) => ({
-            id: `audio-${idx}`,
-            type: 'audio' as const,
-            url: url,
-          })),
-        };
-        messages.push(audioMessage);
+        const audioAttachments = allAudioUrls
+          .map((url: string, idx: number) => {
+            const resolvedUrl = this.resolveUrl(url);
+            if (resolvedUrl && resolvedUrl.trim() !== '') {
+              return {
+                id: `audio-${idx}`,
+                type: 'audio' as const,
+                url: resolvedUrl,
+              };
+            }
+            return null;
+          })
+          .filter((att): att is { id: string; type: 'audio'; url: string } => att !== null);
+
+        if (audioAttachments.length > 0) {
+          const audioMessage: Message = {
+            id: 'audio-conversation',
+            role: 'assistant',
+            content: '[Voice conversation - audio files available]',
+            timestamp: apiData?.metadata?.createTime
+              ? new Date(apiData.metadata.createTime)
+              : new Date(),
+            attachments: audioAttachments,
+          };
+          messages.push(audioMessage);
+        }
       }
 
       // Use title from API metadata if available, otherwise from page scraping
@@ -576,6 +643,265 @@ export class GrokWebProvider extends BaseProvider {
       await page.close();
       throw error;
     }
+  }
+
+  /**
+   * List all assets from grok.com assets library
+   */
+  async listAssets(options?: { pageSize?: number; orderBy?: string }): Promise<Asset[]> {
+    this.requireAuth();
+    const page = await this.scraper!.createPage({
+      cookies: this.config!.cookies!,
+      domain: '.grok.com',
+    });
+
+    try {
+      const pageSize = options?.pageSize || 50;
+      const orderBy = options?.orderBy || 'ORDER_BY_LAST_USE_TIME';
+      const apiUrl = `https://grok.com/rest/assets?pageSize=${pageSize}&orderBy=${orderBy}`;
+
+      // Navigate to grok.com first to establish session
+      await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+      // Make API request using page context (authenticated with cookies)
+      const response = await page.evaluate(async (url) => {
+        const res = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        return await res.json();
+      }, apiUrl);
+
+      await page.close();
+
+      // Parse API response
+      const assets = response.assets || response.data || response;
+
+      if (!Array.isArray(assets)) {
+        console.warn('Unexpected assets API response format:', response);
+        return [];
+      }
+
+      // Transform to Asset format
+      return assets.map((asset: any) => ({
+        id: asset.id || asset.assetId || asset.uuid,
+        provider: this.name,
+        name: asset.name || asset.title || asset.fileName || 'Untitled Asset',
+        type: this.mapAssetType(asset.type || asset.mimeType),
+        url: asset.url || asset.downloadUrl || '',
+        mimeType: asset.mimeType || asset.contentType,
+        size: asset.size || asset.fileSize,
+        createdAt: asset.createdAt ? new Date(asset.createdAt) : new Date(),
+        lastUsedAt: asset.lastUsedAt ? new Date(asset.lastUsedAt) : undefined,
+        metadata: {
+          width: asset.width,
+          height: asset.height,
+          duration: asset.duration,
+          description: asset.description,
+          tags: asset.tags || [],
+          ...asset.metadata,
+        },
+      }));
+    } catch (error) {
+      await page.close();
+      console.error(`Failed to list assets: ${error}`);
+      return []; // Return empty array on error to not break archiving
+    }
+  }
+
+  /**
+   * List all workspaces from grok.com
+   */
+  async listWorkspaces(options?: { pageSize?: number; orderBy?: string }): Promise<Workspace[]> {
+    this.requireAuth();
+    const page = await this.scraper!.createPage({
+      cookies: this.config!.cookies!,
+      domain: '.grok.com',
+    });
+
+    try {
+      const pageSize = options?.pageSize || 50;
+      const orderBy = options?.orderBy || 'ORDER_BY_LAST_USE_TIME';
+      const apiUrl = `https://grok.com/rest/workspaces?pageSize=${pageSize}&orderBy=${orderBy}`;
+
+      // Navigate to grok.com first to establish session
+      await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+      // Make API request using page context (authenticated with cookies)
+      const response = await page.evaluate(async (url) => {
+        const res = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        return await res.json();
+      }, apiUrl);
+
+      await page.close();
+
+      // Parse API response
+      const workspaces = response.workspaces || response.data || response;
+
+      if (!Array.isArray(workspaces)) {
+        console.warn('Unexpected workspaces API response format:', response);
+        return [];
+      }
+
+      // Transform to Workspace format
+      const parsedWorkspaces: Workspace[] = [];
+
+      for (const workspace of workspaces) {
+        const projects = await this.fetchWorkspaceProjects(workspace.id || workspace.workspaceId);
+
+        parsedWorkspaces.push({
+          id: workspace.id || workspace.workspaceId || workspace.uuid,
+          provider: this.name,
+          name: workspace.name || workspace.title || 'Untitled Workspace',
+          description: workspace.description,
+          createdAt: workspace.createdAt ? new Date(workspace.createdAt) : new Date(),
+          updatedAt: workspace.updatedAt ? new Date(workspace.updatedAt) : new Date(),
+          lastUsedAt: workspace.lastUsedAt ? new Date(workspace.lastUsedAt) : undefined,
+          projects,
+          metadata: {
+            projectCount: projects.length,
+            totalFiles: projects.reduce((sum, p) => sum + (p.files?.length || 0), 0),
+            tags: workspace.tags || [],
+            ...workspace.metadata,
+          },
+        });
+      }
+
+      return parsedWorkspaces;
+    } catch (error) {
+      await page.close();
+      console.error(`Failed to list workspaces: ${error}`);
+      return []; // Return empty array on error to not break archiving
+    }
+  }
+
+  /**
+   * Fetch projects for a workspace
+   */
+  private async fetchWorkspaceProjects(workspaceId: string): Promise<Project[]> {
+    const page = await this.scraper!.createPage({
+      cookies: this.config!.cookies!,
+      domain: '.grok.com',
+    });
+
+    try {
+      const apiUrl = `https://grok.com/rest/workspaces/${workspaceId}/projects`;
+
+      await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+      const response = await page.evaluate(async (url) => {
+        const res = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!res.ok) return { projects: [] };
+        return await res.json();
+      }, apiUrl);
+
+      await page.close();
+
+      const projects = response.projects || response.data || response;
+
+      if (!Array.isArray(projects)) {
+        return [];
+      }
+
+      // Transform to Project format
+      return projects.map((project: any) => ({
+        id: project.id || project.projectId || project.uuid,
+        workspaceId,
+        name: project.name || project.title || 'Untitled Project',
+        description: project.description,
+        type: project.type || project.projectType,
+        createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
+        updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date(),
+        lastUsedAt: project.lastUsedAt ? new Date(project.lastUsedAt) : undefined,
+        content: project.content || project.code || project.text,
+        files: this.parseProjectFiles(project.files || []),
+        metadata: {
+          fileCount: project.files?.length || 0,
+          language: project.language || project.programmingLanguage,
+          framework: project.framework,
+          tags: project.tags || [],
+          ...project.metadata,
+        },
+      }));
+    } catch (error) {
+      await page.close();
+      console.error(`Failed to fetch projects for workspace ${workspaceId}: ${error}`);
+      return [];
+    }
+  }
+
+  /**
+   * Parse project files from API response
+   */
+  private parseProjectFiles(files: any[]): ProjectFile[] {
+    if (!Array.isArray(files)) return [];
+
+    return files.map((file: any) => ({
+      id: file.id || file.fileId || `file-${Math.random()}`,
+      name: file.name || file.fileName || 'untitled',
+      path: file.path || file.filePath || file.name || '',
+      content: file.content || file.code || file.text || '',
+      language: file.language || file.programmingLanguage,
+      mimeType: file.mimeType || file.contentType,
+      size: file.size || file.fileSize,
+      createdAt: file.createdAt ? new Date(file.createdAt) : new Date(),
+      updatedAt: file.updatedAt ? new Date(file.updatedAt) : new Date(),
+    }));
+  }
+
+  /**
+   * Map asset type from API to our standard types
+   */
+  private mapAssetType(type: string): Asset['type'] {
+    if (!type) return 'document';
+
+    const lowerType = type.toLowerCase();
+
+    if (lowerType.includes('image') || lowerType.includes('png') || lowerType.includes('jpg'))
+      return 'image';
+    if (lowerType.includes('video') || lowerType.includes('mp4')) return 'video';
+    if (lowerType.includes('audio') || lowerType.includes('mp3')) return 'audio';
+    if (
+      lowerType.includes('code') ||
+      lowerType.includes('javascript') ||
+      lowerType.includes('python')
+    )
+      return 'code';
+    if (lowerType.includes('json') || lowerType.includes('csv') || lowerType.includes('xml'))
+      return 'data';
+
+    return 'document';
+  }
+
+  /**
+   * Resolve relative URLs to absolute URLs
+   */
+  private resolveUrl(url: string): string {
+    if (!url) return '';
+
+    // Already absolute URL
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    // Blob or data URL
+    if (url.startsWith('blob:') || url.startsWith('data:')) {
+      return url;
+    }
+
+    // Relative URL - add https://grok.com prefix
+    const baseUrl = 'https://grok.com';
+
+    // Remove leading slash if present to avoid double slashes
+    const cleanUrl = url.startsWith('/') ? url.slice(1) : url;
+
+    return `${baseUrl}/${cleanUrl}`;
   }
 
   /**

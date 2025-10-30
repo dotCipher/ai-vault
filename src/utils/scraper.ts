@@ -38,9 +38,18 @@ export class BrowserScraper {
   async init(): Promise<void> {
     if (this.browser) return;
 
+    // Check for DEBUG environment variable
+    const debugMode = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
+    const headless = debugMode ? false : this.config.headless;
+
     this.browser = await chromium.launch({
-      headless: this.config.headless,
+      headless,
+      ...(debugMode && { slowMo: 500 }), // Slow down actions when debugging
     });
+
+    if (debugMode) {
+      console.log('[DEBUG] Browser launched in visible mode');
+    }
   }
 
   /**
@@ -57,14 +66,36 @@ export class BrowserScraper {
 
     if (cookieConfig) {
       await context.addCookies(
-        Object.entries(cookieConfig.cookies).map(([name, value]) => ({
-          name,
-          value,
-          domain: cookieConfig.domain,
-          path: '/',
-          // Cookies with __Secure- or __Host- prefix must have secure flag
-          secure: name.startsWith('__Secure-') || name.startsWith('__Host-'),
-        }))
+        Object.entries(cookieConfig.cookies).map(([name, value]) => {
+          // Cookies with __Host- prefix have special requirements:
+          // - Must have secure=true
+          // - Must NOT have a domain attribute
+          // - Must have path=/
+          // - Must use url instead of domain/path
+          // See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#cookie_prefixes
+          const isHostPrefixed = name.startsWith('__Host-');
+
+          const cookie: any = {
+            name,
+            value,
+            secure: name.startsWith('__Secure-') || isHostPrefixed,
+          };
+
+          // __Host- cookies require url parameter instead of domain/path
+          // All other cookies use domain/path
+          if (isHostPrefixed) {
+            // Construct URL from domain (e.g., .chatgpt.com -> https://chatgpt.com)
+            const hostname = cookieConfig.domain.startsWith('.')
+              ? cookieConfig.domain.substring(1)
+              : cookieConfig.domain;
+            cookie.url = `https://${hostname}/`;
+          } else {
+            cookie.domain = cookieConfig.domain;
+            cookie.path = '/';
+          }
+
+          return cookie;
+        })
       );
     }
 

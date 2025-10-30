@@ -63,6 +63,12 @@ export interface ArchiveResult {
   /** Total bytes downloaded */
   bytesDownloaded: number;
 
+  /** Number of assets archived */
+  assetsArchived?: number;
+
+  /** Number of workspaces archived */
+  workspacesArchived?: number;
+
   /** Total time taken (ms) */
   duration: number;
 

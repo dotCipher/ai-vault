@@ -34,9 +34,55 @@ export class Archiver {
       bytesDownloaded: 0,
       duration: 0,
       errors: [],
+      assetsArchived: 0,
+      workspacesArchived: 0,
     };
 
     try {
+      // Archive assets if provider supports it
+      if ('listAssets' in provider && typeof provider.listAssets === 'function') {
+        try {
+          const assetSpinner = ora('Fetching assets library...').start();
+          const assets = await provider.listAssets();
+          assetSpinner.succeed(`Found ${assets.length} assets`);
+
+          if (assets.length > 0 && !options.dryRun) {
+            await this.storage.saveAssets(provider.name, assets);
+            result.assetsArchived = assets.length;
+            console.log(chalk.green(`✓ Archived ${assets.length} assets\n`));
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.log(chalk.yellow(`⚠ Failed to archive assets: ${errorMessage}\n`));
+        }
+      }
+
+      // Archive workspaces if provider supports it
+      if ('listWorkspaces' in provider && typeof provider.listWorkspaces === 'function') {
+        try {
+          const workspaceSpinner = ora('Fetching workspaces...').start();
+          const workspaces = await provider.listWorkspaces();
+          workspaceSpinner.succeed(`Found ${workspaces.length} workspaces`);
+
+          if (workspaces.length > 0 && !options.dryRun) {
+            await this.storage.saveWorkspaces(provider.name, workspaces);
+            result.workspacesArchived = workspaces.length;
+            const totalProjects = workspaces.reduce(
+              (sum: number, ws: any) => sum + ws.projects.length,
+              0
+            );
+            console.log(
+              chalk.green(
+                `✓ Archived ${workspaces.length} workspaces with ${totalProjects} projects\n`
+              )
+            );
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.log(chalk.yellow(`⚠ Failed to archive workspaces: ${errorMessage}\n`));
+        }
+      }
+
       // Step 1: Get list of conversations
       const spinner = ora('Fetching conversation list...').start();
       const conversations = await provider.listConversations({
@@ -77,13 +123,28 @@ export class Archiver {
         const progress = `[${i + 1}/${conversationsToArchive.length}]`;
 
         try {
-          // Check if already exists
-          if (options.skipExisting) {
-            const exists = await this.storage.conversationExists(provider.name, summary.id);
-            if (exists) {
-              console.log(chalk.gray(`${progress} Skipped: ${summary.title} (already exists)`));
-              result.conversationsSkipped++;
-              continue;
+          // Check if already exists and if it needs updating (smart diff)
+          const exists = await this.storage.conversationExists(provider.name, summary.id);
+
+          if (exists && options.skipExisting) {
+            // Get local conversation to compare timestamps
+            const localConv = await this.storage.getConversation(provider.name, summary.id);
+
+            if (localConv) {
+              const localUpdated = new Date(localConv.updatedAt).getTime();
+              const remoteUpdated = summary.updatedAt.getTime();
+
+              // Skip only if local is up-to-date (within 1 second tolerance for rounding)
+              if (remoteUpdated <= localUpdated + 1000) {
+                console.log(chalk.gray(`${progress} Skipped: ${summary.title} (up-to-date)`));
+                result.conversationsSkipped++;
+                continue;
+              }
+
+              // Remote is newer - re-archive it
+              console.log(
+                chalk.yellow(`${progress} Re-archiving: ${summary.title} (updated remotely)`)
+              );
             }
           }
 
@@ -109,11 +170,15 @@ export class Archiver {
               `${progress} Downloading ${conversation.metadata.mediaCount} media files...`
             ).start();
 
+            // Get cookies from provider if available (needed for authenticated media downloads)
+            const providerCookies = (provider as any).config?.cookies;
+
             const mediaResult = await this.mediaManager.downloadConversationMedia(
               conversation,
               (current, total) => {
                 mediaSpinner.text = `${progress} Downloading media: ${current}/${total}`;
-              }
+              },
+              providerCookies
             );
 
             result.mediaDownloaded += mediaResult.downloaded;
@@ -125,8 +190,10 @@ export class Archiver {
                 `${progress} Downloaded ${mediaResult.downloaded}/${conversation.metadata.mediaCount} media files (${mediaResult.failed} failed)`
               );
 
-              // Add media errors
+              // Add media errors and log them for debugging
               for (const error of mediaResult.errors) {
+                console.log(chalk.red(`  Media download failed: ${error.url}`));
+                console.log(chalk.gray(`  Error: ${error.error}`));
                 result.errors.push({
                   id: summary.id,
                   type: 'media',
@@ -189,6 +256,16 @@ export class Archiver {
     console.log(`  Archived: ${chalk.green(result.conversationsArchived)}`);
     if (result.conversationsSkipped > 0) {
       console.log(`  Skipped:  ${chalk.gray(result.conversationsSkipped)}`);
+    }
+
+    if (result.assetsArchived && result.assetsArchived > 0) {
+      console.log(chalk.cyan('\nAssets Library:'));
+      console.log(`  Archived: ${chalk.green(result.assetsArchived)}`);
+    }
+
+    if (result.workspacesArchived && result.workspacesArchived > 0) {
+      console.log(chalk.cyan('\nWorkspaces:'));
+      console.log(`  Archived: ${chalk.green(result.workspacesArchived)}`);
     }
 
     if (result.mediaDownloaded > 0 || result.mediaSkipped > 0) {

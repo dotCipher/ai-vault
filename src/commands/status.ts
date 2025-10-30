@@ -66,10 +66,31 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
 
     try {
       await provider.authenticate(providerConfig);
+      const isAuth = await provider.isAuthenticated();
+
+      if (!isAuth) {
+        spinner.fail('Authentication failed');
+        console.error(chalk.red('\nYour session cookies appear to be expired or invalid.'));
+        console.error(
+          chalk.yellow(
+            `\nTo fix this, run: ${chalk.bold(`ai-vault setup --provider ${providerName}`)}`
+          )
+        );
+        console.error(chalk.gray('\nThis will guide you through updating your session cookies.'));
+        process.exit(1);
+      }
+
       spinner.succeed(`Connected to ${provider.displayName}`);
     } catch (error: any) {
       spinner.fail('Authentication failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red(`\n${error.message}`));
+      if (error.message.includes('session') || error.message.includes('cookies')) {
+        console.error(
+          chalk.yellow(
+            `\nTo fix this, run: ${chalk.bold(`ai-vault setup --provider ${providerName}`)}`
+          )
+        );
+      }
       process.exit(1);
     }
 
@@ -158,7 +179,7 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
     // Summary
     console.log(chalk.bold('Summary:'));
     console.log(`  ${chalk.green('✓')} Already archived: ${diff.archivedConversations.length}`);
-    console.log(`  ${chalk.yellow('○')} Updated remotely: ${diff.updatedConversations.length}`);
+    console.log(`  ${chalk.yellow('○')} Updated on remote: ${diff.updatedConversations.length}`);
     console.log(`  ${chalk.blue('+')} New (not archived): ${diff.newConversations.length}`);
     console.log(`  ${chalk.gray('=')} Total remote: ${remoteConversations.length}`);
     console.log();
@@ -182,7 +203,7 @@ export async function statusCommand(options: StatusOptions): Promise<void> {
     // Show updated conversations
     if (diff.updatedConversations.length > 0) {
       console.log(
-        chalk.bold.yellow(`\n🔄 Updated Remotely (${diff.updatedConversations.length}):`)
+        chalk.bold.yellow(`\n🔄 Updated on Remote (${diff.updatedConversations.length}):`)
       );
       console.log(chalk.gray('─'.repeat(80)));
       diff.updatedConversations.slice(0, 10).forEach((conv) => {

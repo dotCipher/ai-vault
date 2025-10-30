@@ -193,8 +193,11 @@ describe('ChatGPTProvider', () => {
             accessToken: 'test-token',
             sessionData: { expires: '2026-01-01T00:00:00Z' },
           })
-          // Second call: fetch conversations
-          .mockResolvedValueOnce({ items: mockConversations }),
+          // Second call: fetch conversations and projects
+          .mockResolvedValueOnce({
+            conversations: { items: mockConversations },
+            projects: null,
+          }),
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };
@@ -247,8 +250,11 @@ describe('ChatGPTProvider', () => {
             accessToken: 'test-token',
             sessionData: { expires: '2026-01-01T00:00:00Z' },
           })
-          // Second call: fetch conversations
-          .mockResolvedValueOnce({ items: mockConversations }),
+          // Second call: fetch conversations and projects
+          .mockResolvedValueOnce({
+            conversations: { items: mockConversations },
+            projects: null,
+          }),
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };
@@ -289,8 +295,11 @@ describe('ChatGPTProvider', () => {
             accessToken: 'test-token',
             sessionData: { expires: '2026-01-01T00:00:00Z' },
           })
-          // Second call: fetch conversations
-          .mockResolvedValueOnce({ items: mockConversations.slice(0, 5) }),
+          // Second call: fetch conversations and projects
+          .mockResolvedValueOnce({
+            conversations: { items: mockConversations.slice(0, 5) },
+            projects: null,
+          }),
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };

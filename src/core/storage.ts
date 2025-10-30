@@ -8,7 +8,7 @@
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import type { Conversation } from '../types/index.js';
+import type { Conversation, Asset, Workspace, Project } from '../types/index.js';
 import type { StorageConfig, ExportFormat, ConversationIndex } from '../types/storage.js';
 
 export class Storage {
@@ -49,6 +49,35 @@ export class Storage {
       this.sanitizeFilename(conversationId)
     );
     return existsSync(conversationDir);
+  }
+
+  /**
+   * Get an existing conversation from storage
+   */
+  async getConversation(provider: string, conversationId: string): Promise<Conversation | null> {
+    const conversationDir = path.join(
+      this.config.baseDir,
+      provider,
+      'conversations',
+      this.sanitizeFilename(conversationId)
+    );
+
+    if (!existsSync(conversationDir)) {
+      return null;
+    }
+
+    // Try to read the JSON file (most reliable format)
+    const jsonPath = path.join(conversationDir, 'conversation.json');
+    if (existsSync(jsonPath)) {
+      const content = await fs.readFile(jsonPath, 'utf-8');
+      const conv = JSON.parse(content) as Conversation;
+      // Ensure dates are Date objects
+      conv.createdAt = new Date(conv.createdAt);
+      conv.updatedAt = new Date(conv.updatedAt);
+      return conv;
+    }
+
+    return null;
   }
 
   /**
@@ -212,6 +241,242 @@ export class Storage {
    */
   private capitalize(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  /**
+   * Save assets to disk
+   */
+  async saveAssets(provider: string, assets: Asset[]): Promise<void> {
+    const assetsDir = path.join(this.config.baseDir, provider, 'assets');
+    await fs.mkdir(assetsDir, { recursive: true });
+
+    // Save assets index with all metadata
+    const indexPath = path.join(assetsDir, 'assets-index.json');
+    const assetsIndex = assets.map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      type: asset.type,
+      url: asset.url,
+      localPath: asset.localPath,
+      mimeType: asset.mimeType,
+      size: asset.size,
+      createdAt: asset.createdAt.toISOString(),
+      lastUsedAt: asset.lastUsedAt?.toISOString(),
+      metadata: asset.metadata,
+    }));
+
+    await fs.writeFile(indexPath, JSON.stringify(assetsIndex, null, 2), 'utf-8');
+
+    // Organize by type in subdirectories
+    for (const asset of assets) {
+      const typeDir = path.join(assetsDir, 'by-type', asset.type);
+      await fs.mkdir(typeDir, { recursive: true });
+
+      // Save individual asset metadata
+      const assetFile = path.join(typeDir, `${this.sanitizeFilename(asset.id)}.json`);
+      await fs.writeFile(assetFile, JSON.stringify(asset, null, 2), 'utf-8');
+    }
+  }
+
+  /**
+   * Save workspaces to disk
+   */
+  async saveWorkspaces(provider: string, workspaces: Workspace[]): Promise<void> {
+    const workspacesDir = path.join(this.config.baseDir, provider, 'workspaces');
+    await fs.mkdir(workspacesDir, { recursive: true });
+
+    // Save workspaces index
+    const indexPath = path.join(workspacesDir, 'workspaces-index.json');
+    const workspacesIndex = workspaces.map((ws) => ({
+      id: ws.id,
+      name: ws.name,
+      description: ws.description,
+      createdAt: ws.createdAt.toISOString(),
+      updatedAt: ws.updatedAt.toISOString(),
+      lastUsedAt: ws.lastUsedAt?.toISOString(),
+      projectCount: ws.projects.length,
+      metadata: ws.metadata,
+    }));
+
+    await fs.writeFile(indexPath, JSON.stringify(workspacesIndex, null, 2), 'utf-8');
+
+    // Save each workspace with its projects
+    for (const workspace of workspaces) {
+      const workspaceDir = path.join(workspacesDir, this.sanitizeFilename(workspace.id));
+      await fs.mkdir(workspaceDir, { recursive: true });
+
+      // Save workspace metadata
+      const workspaceFile = path.join(workspaceDir, 'workspace.json');
+      await fs.writeFile(
+        workspaceFile,
+        JSON.stringify(
+          {
+            id: workspace.id,
+            provider: workspace.provider,
+            name: workspace.name,
+            description: workspace.description,
+            createdAt: workspace.createdAt.toISOString(),
+            updatedAt: workspace.updatedAt.toISOString(),
+            lastUsedAt: workspace.lastUsedAt?.toISOString(),
+            metadata: workspace.metadata,
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+
+      // Save workspace as markdown
+      const workspaceMd = path.join(workspaceDir, 'workspace.md');
+      await fs.writeFile(workspaceMd, this.formatWorkspaceAsMarkdown(workspace), 'utf-8');
+
+      // Save projects
+      if (workspace.projects.length > 0) {
+        const projectsDir = path.join(workspaceDir, 'projects');
+        await fs.mkdir(projectsDir, { recursive: true });
+
+        for (const project of workspace.projects) {
+          await this.saveProject(projectsDir, project);
+        }
+      }
+    }
+  }
+
+  /**
+   * Save a single project
+   */
+  private async saveProject(projectsDir: string, project: Project): Promise<void> {
+    const projectDir = path.join(projectsDir, this.sanitizeFilename(project.id));
+    await fs.mkdir(projectDir, { recursive: true });
+
+    // Save project metadata as JSON
+    const projectFile = path.join(projectDir, 'project.json');
+    await fs.writeFile(projectFile, JSON.stringify(project, null, 2), 'utf-8');
+
+    // Save project as markdown
+    const projectMd = path.join(projectDir, 'project.md');
+    await fs.writeFile(projectMd, this.formatProjectAsMarkdown(project), 'utf-8');
+
+    // Save project files if present
+    if (project.files && project.files.length > 0) {
+      const filesDir = path.join(projectDir, 'files');
+      await fs.mkdir(filesDir, { recursive: true });
+
+      for (const file of project.files) {
+        const filePath = path.join(filesDir, this.sanitizeFilename(file.name));
+        await fs.writeFile(filePath, file.content, 'utf-8');
+      }
+    }
+  }
+
+  /**
+   * Format workspace as Markdown
+   */
+  private formatWorkspaceAsMarkdown(workspace: Workspace): string {
+    const lines: string[] = [];
+
+    // Header
+    lines.push(`# ${workspace.name}\n`);
+
+    if (workspace.description) {
+      lines.push(`${workspace.description}\n`);
+    }
+
+    lines.push(`**Created:** ${workspace.createdAt.toISOString()}`);
+    lines.push(`**Updated:** ${workspace.updatedAt.toISOString()}`);
+    if (workspace.lastUsedAt) {
+      lines.push(`**Last Used:** ${workspace.lastUsedAt.toISOString()}`);
+    }
+    lines.push(`**Projects:** ${workspace.projects.length}`);
+    lines.push('');
+    lines.push('---\n');
+
+    // Projects
+    if (workspace.projects.length > 0) {
+      lines.push('## Projects\n');
+      for (const project of workspace.projects) {
+        lines.push(`### ${project.name}`);
+        if (project.description) {
+          lines.push(`${project.description}\n`);
+        }
+        if (project.type) {
+          lines.push(`**Type:** ${project.type}`);
+        }
+        lines.push(`**Files:** ${project.files?.length || 0}`);
+        lines.push(`**Updated:** ${project.updatedAt.toISOString()}`);
+        lines.push('');
+      }
+    }
+
+    // Metadata
+    lines.push('## Metadata\n');
+    lines.push('```json');
+    lines.push(JSON.stringify(workspace.metadata, null, 2));
+    lines.push('```');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Format project as Markdown
+   */
+  private formatProjectAsMarkdown(project: Project): string {
+    const lines: string[] = [];
+
+    // Header
+    lines.push(`# ${project.name}\n`);
+
+    if (project.description) {
+      lines.push(`${project.description}\n`);
+    }
+
+    if (project.type) {
+      lines.push(`**Type:** ${project.type}`);
+    }
+    lines.push(`**Created:** ${project.createdAt.toISOString()}`);
+    lines.push(`**Updated:** ${project.updatedAt.toISOString()}`);
+    if (project.lastUsedAt) {
+      lines.push(`**Last Used:** ${project.lastUsedAt.toISOString()}`);
+    }
+    if (project.files) {
+      lines.push(`**Files:** ${project.files.length}`);
+    }
+    lines.push('');
+    lines.push('---\n');
+
+    // Content
+    if (project.content) {
+      lines.push('## Content\n');
+      lines.push('```');
+      lines.push(project.content);
+      lines.push('```\n');
+    }
+
+    // Files
+    if (project.files && project.files.length > 0) {
+      lines.push('## Files\n');
+      for (const file of project.files) {
+        lines.push(`### ${file.name}`);
+        if (file.path) {
+          lines.push(`**Path:** \`${file.path}\``);
+        }
+        if (file.language) {
+          lines.push(`**Language:** ${file.language}`);
+        }
+        lines.push('');
+        lines.push(`\`\`\`${file.language || ''}`);
+        lines.push(file.content);
+        lines.push('```\n');
+      }
+    }
+
+    // Metadata
+    lines.push('## Metadata\n');
+    lines.push('```json');
+    lines.push(JSON.stringify(project.metadata, null, 2));
+    lines.push('```');
+
+    return lines.join('\n');
   }
 
   /**

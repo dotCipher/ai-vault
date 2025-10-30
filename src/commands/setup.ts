@@ -317,21 +317,40 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
     clack.log.info('1. Open chatgpt.com in your browser and log in');
     clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
     clack.log.info('3. Go to Application → Cookies → https://chatgpt.com');
-    clack.log.info('4. Find the cookie below and copy its VALUE');
+    clack.log.info('4. Find the cookies below and copy their VALUES');
+    clack.log.info('');
+    clack.log.warn('⚠️  Important: Some cookies may not be present for all users.');
+    clack.log.warn('   Press Enter to skip optional cookies.');
     console.log();
 
     // Define required cookies for ChatGPT
     const requiredCookies = [
       {
         name: '__Secure-next-auth.session-token',
-        description: 'Session token',
-        hint: 'Long token string',
+        description: 'Session token (REQUIRED)',
+        hint: 'Long JWT-like token',
+        required: true,
+      },
+    ];
+
+    const optionalCookies = [
+      {
+        name: '__Host-next-auth.csrf-token',
+        description: 'CSRF token (optional, may improve reliability)',
+        hint: 'Long alphanumeric string - press Enter to skip if not found',
+        required: false,
+      },
+      {
+        name: '__Secure-next-auth.callback-url',
+        description: 'Callback URL (optional)',
+        hint: 'Usually https://chatgpt.com - press Enter to skip if not found',
+        required: false,
       },
     ];
 
     cookies = {};
 
-    // Prompt for each cookie
+    // Prompt for required cookies
     for (const cookieInfo of requiredCookies) {
       const value = await clack.text({
         message: `Enter value for cookie "${cookieInfo.name}" (${cookieInfo.description}):`,
@@ -352,7 +371,27 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
       cookies[cookieInfo.name] = (value as string).trim();
     }
 
-    clack.log.success('Cookie collected successfully!');
+    // Prompt for optional cookies
+    for (const cookieInfo of optionalCookies) {
+      const value = await clack.text({
+        message: `Enter value for cookie "${cookieInfo.name}" (${cookieInfo.description}):`,
+        placeholder: `${cookieInfo.hint} (press Enter to skip)`,
+      });
+
+      if (clack.isCancel(value)) {
+        clack.cancel('Setup cancelled');
+        process.exit(0);
+      }
+
+      const trimmedValue = (value as string)?.trim();
+      if (trimmedValue && trimmedValue.length > 0) {
+        cookies[cookieInfo.name] = trimmedValue;
+      }
+    }
+
+    clack.log.success(
+      `Collected ${Object.keys(cookies).length} cookie${Object.keys(cookies).length > 1 ? 's' : ''} successfully!`
+    );
   }
 
   const providerConfig: ProviderConfig = {
