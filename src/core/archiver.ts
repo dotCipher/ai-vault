@@ -199,7 +199,7 @@ export class Archiver {
             // Fetch full conversation
             const fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
             const conversation = await provider.fetchConversation(summary.id);
-            fetchSpinner.succeed(`${progress} Fetched: ${conversation.title}`);
+            fetchSpinner.stop(); // Stop silently - final "Archived" message will confirm success
 
             // Record successful operation
             rateLimiter.recordSuccess();

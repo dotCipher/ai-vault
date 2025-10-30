@@ -141,12 +141,16 @@ export class ChatGPTProvider extends BaseProvider {
 
       // Check if we have a valid cached token
       if (this.isTokenValid()) {
-        console.log('[ChatGPT] Using cached access token');
+        if (process.env.DEBUG) {
+          console.log('[ChatGPT] Using cached access token');
+        }
         accessToken = this.config!.accessToken!;
         // Quick navigation without waiting for full load
         await page.goto('https://chatgpt.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
       } else {
-        console.log('[ChatGPT] Fetching new access token...');
+        if (process.env.DEBUG) {
+          console.log('[ChatGPT] Fetching new access token...');
+        }
         // Full navigation to establish session
         await page.goto('https://chatgpt.com', { waitUntil: 'networkidle', timeout: 30000 });
         const result = await this.fetchAccessToken(page);
@@ -285,12 +289,16 @@ export class ChatGPTProvider extends BaseProvider {
 
       // Check if we have a valid cached token
       if (this.isTokenValid()) {
-        console.log('[ChatGPT] Using cached access token');
+        if (process.env.DEBUG) {
+          console.log('[ChatGPT] Using cached access token');
+        }
         accessToken = this.config!.accessToken!;
         // Quick navigation without waiting for full load
         await page.goto('https://chatgpt.com', { waitUntil: 'domcontentloaded', timeout: 15000 });
       } else {
-        console.log('[ChatGPT] Fetching new access token...');
+        if (process.env.DEBUG) {
+          console.log('[ChatGPT] Fetching new access token...');
+        }
         // Full navigation to establish session
         await page.goto('https://chatgpt.com', { waitUntil: 'networkidle', timeout: 30000 });
         const result = await this.fetchAccessToken(page);
