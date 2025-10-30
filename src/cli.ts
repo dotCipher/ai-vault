@@ -21,8 +21,14 @@ program
   .name('ai-vault')
   .description(
     'Own your data. Comprehensive archival of AI interactions—conversations, images, videos, code artifacts, and metadata—across multiple platforms.'
-  )
-  .version(packageJson.version, '-v, -V, --version', 'Output the current version');
+  );
+
+program
+  .command('version')
+  .description('Output the current version')
+  .action(() => {
+    console.log(packageJson.version);
+  });
 
 program
   .command('setup')

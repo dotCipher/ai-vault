@@ -174,59 +174,82 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       clack.log.info('4. Find each cookie below and copy its VALUE');
       console.log();
 
-      // Define required cookies
-      const requiredCookies = [
-        {
-          name: 'sso',
-          description: 'SSO session token',
-          hint: 'Starts with eyJ...',
-        },
-        {
-          name: 'sso-rw',
-          description: 'SSO read-write token',
-          hint: 'Starts with eyJ...',
-        },
-        {
-          name: 'stblid',
-          description: 'Stable ID',
-          hint: 'UUID format (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
-        },
-      ];
-
       cookies = {};
 
-      // Prompt for each cookie
-      for (const cookieInfo of requiredCookies) {
-        const value = await clack.text({
-          message: `Enter value for cookie "${cookieInfo.name}" (${cookieInfo.description}):`,
-          placeholder: cookieInfo.hint,
-          validate: (val) => {
-            if (!val || val.trim().length === 0) {
-              return `${cookieInfo.name} is required`;
-            }
-            if (cookieInfo.name === 'stblid') {
-              // Validate UUID format
-              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-              if (!uuidRegex.test(val.trim())) {
-                return 'stblid should be a valid UUID';
-              }
-            } else if (cookieInfo.name.startsWith('sso')) {
-              // Validate JWT-like format (starts with eyJ)
-              if (!val.trim().startsWith('eyJ')) {
-                return `${cookieInfo.name} should start with "eyJ"`;
-              }
-            }
-            return undefined;
-          },
-        });
+      // Prompt for sso cookie first
+      const ssoValue = await clack.text({
+        message: 'Enter value for cookie "sso" (SSO session token):',
+        placeholder: 'Starts with eyJ...',
+        validate: (val) => {
+          if (!val || val.trim().length === 0) {
+            return 'sso is required';
+          }
+          if (!val.trim().startsWith('eyJ')) {
+            return 'sso should start with "eyJ"';
+          }
+          return undefined;
+        },
+      });
 
-        if (clack.isCancel(value)) {
-          clack.cancel('Setup cancelled');
-          process.exit(0);
-        }
-
-        cookies[cookieInfo.name] = (value as string).trim();
+      if (clack.isCancel(ssoValue)) {
+        clack.cancel('Setup cancelled');
+        process.exit(0);
       }
+
+      cookies['sso'] = (ssoValue as string).trim();
+
+      // Prompt for sso-rw cookie (allow using same value as sso)
+      const ssoRwValue = await clack.text({
+        message: 'Enter value for cookie "sso-rw" (SSO read-write token):',
+        placeholder: 'Press Enter to use same value as "sso", or paste different value',
+        validate: (val) => {
+          // Allow empty - will use sso value
+          if (!val || val.trim().length === 0) {
+            return undefined;
+          }
+          // If provided, validate format
+          if (!val.trim().startsWith('eyJ')) {
+            return 'sso-rw should start with "eyJ"';
+          }
+          return undefined;
+        },
+      });
+
+      if (clack.isCancel(ssoRwValue)) {
+        clack.cancel('Setup cancelled');
+        process.exit(0);
+      }
+
+      // Use sso value if sso-rw is empty
+      const ssoRwTrimmed = (ssoRwValue as string).trim();
+      cookies['sso-rw'] = ssoRwTrimmed.length > 0 ? ssoRwTrimmed : cookies['sso'];
+
+      if (ssoRwTrimmed.length === 0) {
+        clack.log.info('Using same value as "sso" for "sso-rw"');
+      }
+
+      // Prompt for stblid cookie
+      const stblidValue = await clack.text({
+        message: 'Enter value for cookie "stblid" (Stable ID):',
+        placeholder: 'UUID format (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
+        validate: (val) => {
+          if (!val || val.trim().length === 0) {
+            return 'stblid is required';
+          }
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(val.trim())) {
+            return 'stblid should be a valid UUID';
+          }
+          return undefined;
+        },
+      });
+
+      if (clack.isCancel(stblidValue)) {
+        clack.cancel('Setup cancelled');
+        process.exit(0);
+      }
+
+      cookies['stblid'] = (stblidValue as string).trim();
 
       clack.log.success('All cookies collected successfully!');
     }
