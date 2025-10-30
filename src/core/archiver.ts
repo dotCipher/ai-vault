@@ -45,8 +45,8 @@ export class Archiver {
     try {
       // Archive assets if provider supports it
       if ('listAssets' in provider && typeof provider.listAssets === 'function') {
+        const assetSpinner = ora('Fetching assets library...').start();
         try {
-          const assetSpinner = ora('Fetching assets library...').start();
           const assets = await provider.listAssets();
           assetSpinner.succeed(`Found ${assets.length} assets`);
 
@@ -56,15 +56,16 @@ export class Archiver {
             console.log(chalk.green(`✓ Archived ${assets.length} assets\n`));
           }
         } catch (error) {
+          assetSpinner.fail('Failed to fetch assets');
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.log(chalk.yellow(`⚠ Failed to archive assets: ${errorMessage}\n`));
+          console.log(chalk.yellow(`⚠ ${errorMessage}\n`));
         }
       }
 
       // Archive workspaces if provider supports it
       if ('listWorkspaces' in provider && typeof provider.listWorkspaces === 'function') {
+        const workspaceSpinner = ora('Fetching workspaces...').start();
         try {
-          const workspaceSpinner = ora('Fetching workspaces...').start();
           const workspaces = await provider.listWorkspaces();
           workspaceSpinner.succeed(`Found ${workspaces.length} workspaces`);
 
@@ -82,19 +83,26 @@ export class Archiver {
             );
           }
         } catch (error) {
+          workspaceSpinner.fail('Failed to fetch workspaces');
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.log(chalk.yellow(`⚠ Failed to archive workspaces: ${errorMessage}\n`));
+          console.log(chalk.yellow(`⚠ ${errorMessage}\n`));
         }
       }
 
       // Step 1: Get list of conversations
       const spinner = ora('Fetching conversation list...').start();
-      const conversations = await provider.listConversations({
-        since: options.since,
-        until: options.until,
-        limit: options.limit,
-      });
-      spinner.succeed(`Found ${conversations.length} conversations`);
+      let conversations;
+      try {
+        conversations = await provider.listConversations({
+          since: options.since,
+          until: options.until,
+          limit: options.limit,
+        });
+        spinner.succeed(`Found ${conversations.length} conversations`);
+      } catch (error) {
+        spinner.fail('Failed to fetch conversation list');
+        throw error;
+      }
 
       // Filter if specific IDs requested
       let conversationsToArchive = conversations;
