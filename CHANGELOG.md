@@ -1,3 +1,9 @@
+# [1.9.0](https://github.com/dotCipher/ai-vault/compare/v1.8.0...v1.9.0) (2025-10-30)
+
+### Features
+
+- add assets/workspaces archiving, fix media downloads, and prevent config corruption ([#7](https://github.com/dotCipher/ai-vault/issues/7)) ([a243250](https://github.com/dotCipher/ai-vault/commit/a2432505161ea9b6a0f21040be1fd669e0b5982c))
+
 # [1.8.0](https://github.com/dotCipher/ai-vault/compare/v1.7.0...v1.8.0) (2025-10-29)
 
 ### Features
