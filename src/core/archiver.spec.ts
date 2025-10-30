@@ -74,6 +74,8 @@ describe('Archiver', () => {
         totalMedia: 5,
         totalSize: 1024000,
       }),
+      enableBatchMode: vi.fn(),
+      disableBatchMode: vi.fn().mockResolvedValue(undefined),
     };
 
     // Mock MediaManager

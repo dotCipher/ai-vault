@@ -1,3 +1,5 @@
+.claude/settings.local.json
+
 # Dependencies
 node_modules/
 package-lock.json

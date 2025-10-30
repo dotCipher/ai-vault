@@ -8,14 +8,86 @@
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import zlib from 'zlib';
+import { promisify } from 'util';
 import type { Conversation, Asset, Workspace, Project } from '../types/index.js';
 import type { StorageConfig, ExportFormat, ConversationIndex } from '../types/storage.js';
 
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
+
 export class Storage {
   private config: StorageConfig;
+  private batchMode: boolean = false;
+  private pendingIndexUpdates: Map<string, Map<string, ConversationIndex[string]>> = new Map();
+  private useCompression: boolean = false; // Disable compression by default for compatibility
 
   constructor(config: StorageConfig) {
     this.config = config;
+  }
+
+  /**
+   * Enable or disable gzip compression for JSON files
+   * Compression reduces disk usage by ~70-80% but adds minor CPU overhead
+   */
+  setCompression(enabled: boolean): void {
+    this.useCompression = enabled;
+  }
+
+  /**
+   * Enable batch mode for improved performance when saving multiple conversations
+   * In batch mode, index updates are queued in memory and saved in a single operation
+   */
+  enableBatchMode(): void {
+    this.batchMode = true;
+    this.pendingIndexUpdates.clear();
+  }
+
+  /**
+   * Disable batch mode and flush any pending updates
+   */
+  async disableBatchMode(): Promise<void> {
+    await this.flushPendingUpdates();
+    this.batchMode = false;
+  }
+
+  /**
+   * Flush all pending index updates to disk
+   */
+  async flushPendingUpdates(): Promise<void> {
+    if (!this.batchMode || this.pendingIndexUpdates.size === 0) {
+      return;
+    }
+
+    // Process each provider's pending updates
+    for (const [provider, updates] of this.pendingIndexUpdates.entries()) {
+      const indexPath = path.join(this.config.baseDir, provider, 'index.json');
+
+      // Load existing index
+      let index: ConversationIndex = {};
+      if (existsSync(indexPath)) {
+        const content = await fs.readFile(indexPath, 'utf-8');
+        index = JSON.parse(content);
+      }
+
+      // Apply all pending updates
+      for (const [conversationId, entry] of updates.entries()) {
+        index[conversationId] = entry;
+      }
+
+      // Save updated index with compression
+      await fs.mkdir(path.dirname(indexPath), { recursive: true });
+
+      if (this.useCompression) {
+        const compressed = await gzip(JSON.stringify(index, null, 2));
+        await fs.writeFile(indexPath + '.gz', compressed);
+      } else {
+        await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      }
+    }
+
+    // Clear pending updates
+    this.pendingIndexUpdates.clear();
   }
 
   /**
@@ -29,9 +101,17 @@ export class Storage {
 
     // Save in all requested formats
     for (const format of this.config.formats) {
-      const filePath = path.join(conversationDir, `conversation.${this.getExtension(format)}`);
+      const extension = this.getExtension(format);
+      const filePath = path.join(conversationDir, `conversation.${extension}`);
       const content = this.formatConversation(conversation, format);
-      await fs.writeFile(filePath, content, 'utf-8');
+
+      // Use compression for JSON files to save disk space
+      if (format === 'json' && this.useCompression) {
+        const compressed = await gzip(content);
+        await fs.writeFile(filePath + '.gz', compressed);
+      } else {
+        await fs.writeFile(filePath, content, 'utf-8');
+      }
     }
 
     // Update index
@@ -66,8 +146,22 @@ export class Storage {
       return null;
     }
 
-    // Try to read the JSON file (most reliable format)
+    // Try to read the JSON file (check both compressed and uncompressed)
     const jsonPath = path.join(conversationDir, 'conversation.json');
+    const jsonGzPath = jsonPath + '.gz';
+
+    // Try compressed first (newer format)
+    if (existsSync(jsonGzPath)) {
+      const compressed = await fs.readFile(jsonGzPath);
+      const decompressed = await gunzip(compressed);
+      const conv = JSON.parse(decompressed.toString('utf-8')) as Conversation;
+      // Ensure dates are Date objects
+      conv.createdAt = new Date(conv.createdAt);
+      conv.updatedAt = new Date(conv.updatedAt);
+      return conv;
+    }
+
+    // Fall back to uncompressed (legacy format)
     if (existsSync(jsonPath)) {
       const content = await fs.readFile(jsonPath, 'utf-8');
       const conv = JSON.parse(content) as Conversation;
@@ -174,20 +268,10 @@ export class Storage {
   }
 
   /**
-   * Update conversation index
+   * Update conversation index (batched if in batch mode, immediate otherwise)
    */
   private async updateIndex(conversation: Conversation, conversationPath: string): Promise<void> {
-    const indexPath = path.join(this.config.baseDir, conversation.provider, 'index.json');
-
-    // Load existing index or create new one
-    let index: ConversationIndex = {};
-    if (existsSync(indexPath)) {
-      const content = await fs.readFile(indexPath, 'utf-8');
-      index = JSON.parse(content);
-    }
-
-    // Add/update conversation entry
-    index[conversation.id] = {
+    const indexEntry = {
       title: conversation.title,
       provider: conversation.provider,
       messageCount: conversation.messages.length,
@@ -199,8 +283,34 @@ export class Storage {
       path: path.relative(path.join(this.config.baseDir, conversation.provider), conversationPath),
     };
 
-    // Save index
-    await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    if (this.batchMode) {
+      // Queue update for later batch save
+      if (!this.pendingIndexUpdates.has(conversation.provider)) {
+        this.pendingIndexUpdates.set(conversation.provider, new Map());
+      }
+      this.pendingIndexUpdates.get(conversation.provider)!.set(conversation.id, indexEntry);
+    } else {
+      // Immediate save (legacy behavior)
+      const indexPath = path.join(this.config.baseDir, conversation.provider, 'index.json');
+
+      // Load existing index or create new one
+      let index: ConversationIndex = {};
+      if (existsSync(indexPath)) {
+        const content = await fs.readFile(indexPath, 'utf-8');
+        index = JSON.parse(content);
+      }
+
+      // Add/update conversation entry
+      index[conversation.id] = indexEntry;
+
+      // Save index with optional compression
+      if (this.useCompression) {
+        const compressed = await gzip(JSON.stringify(index, null, 2));
+        await fs.writeFile(indexPath + '.gz', compressed);
+      } else {
+        await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+      }
+    }
   }
 
   /**
@@ -208,7 +318,16 @@ export class Storage {
    */
   async getIndex(provider: string): Promise<ConversationIndex> {
     const indexPath = path.join(this.config.baseDir, provider, 'index.json');
+    const indexGzPath = indexPath + '.gz';
 
+    // Try compressed first
+    if (existsSync(indexGzPath)) {
+      const compressed = await fs.readFile(indexGzPath);
+      const decompressed = await gunzip(compressed);
+      return JSON.parse(decompressed.toString('utf-8'));
+    }
+
+    // Fall back to uncompressed
     if (!existsSync(indexPath)) {
       return {};
     }

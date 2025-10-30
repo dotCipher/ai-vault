@@ -22,6 +22,14 @@ export interface Provider {
   /** Supported authentication methods */
   readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[];
 
+  /** Optional rate limit configuration for smart concurrency */
+  readonly rateLimit?: {
+    /** Maximum concurrent requests this provider can handle */
+    maxConcurrent?: number;
+    /** Requests per second limit */
+    requestsPerSecond?: number;
+  };
+
   /**
    * Authenticate with the provider
    * @param config Provider configuration

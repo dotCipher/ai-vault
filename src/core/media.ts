@@ -8,11 +8,15 @@
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import http from 'http';
+import https from 'https';
 import crypto from 'crypto';
 import { createWriteStream } from 'fs';
 import type { Conversation, Attachment } from '../types/index.js';
 import type { MediaRegistry } from '../types/storage.js';
+import pLimit from 'p-limit';
+import os from 'os';
 
 export interface MediaDownloadResult {
   downloaded: number;
@@ -26,10 +30,37 @@ export class MediaManager {
   private baseDir: string;
   private registryPath: string;
   private registry: MediaRegistry = {};
+  private httpClient?: AxiosInstance;
 
   constructor(baseDir: string) {
     this.baseDir = baseDir;
     this.registryPath = path.join(baseDir, 'media-registry.json');
+  }
+
+  /**
+   * Get or create HTTP client with connection pooling (lazy initialization)
+   */
+  private getHttpClient(): AxiosInstance {
+    if (!this.httpClient) {
+      // Create HTTP client with connection pooling for improved performance
+      this.httpClient = axios.create({
+        timeout: 60000,
+        // Enable connection pooling with keep-alive
+        httpAgent: new http.Agent({
+          keepAlive: true,
+          keepAliveMsecs: 30000,
+          maxSockets: 50,
+          maxFreeSockets: 10,
+        }),
+        httpsAgent: new https.Agent({
+          keepAlive: true,
+          keepAliveMsecs: 30000,
+          maxSockets: 50,
+          maxFreeSockets: 10,
+        }),
+      });
+    }
+    return this.httpClient;
   }
 
   /**
@@ -40,7 +71,7 @@ export class MediaManager {
   }
 
   /**
-   * Download all media from a conversation
+   * Download all media from a conversation with parallel processing
    */
   async downloadConversationMedia(
     conversation: Conversation,
@@ -66,92 +97,126 @@ export class MediaManager {
     }
 
     const total = allAttachments.length;
-    let current = 0;
+    if (total === 0) {
+      return result;
+    }
 
-    for (const { attachment } of allAttachments) {
-      current++;
-      onProgress?.(current, total);
+    // Calculate optimal concurrency for media downloads
+    // More aggressive than conversation downloads since these are typically smaller files
+    const cpuCount = os.cpus().length;
+    const concurrency = Math.max(3, Math.min(cpuCount, 15)); // Min 3, max 15
+    const limit = pLimit(concurrency);
 
-      try {
-        // Validate URL exists and is not empty
-        if (!attachment.url || attachment.url.trim() === '') {
-          console.warn(`Skipping attachment with empty URL:`, {
-            id: attachment.id,
+    let completed = 0;
+
+    // Download all media in parallel with concurrency control
+    const downloadTasks = allAttachments.map(({ attachment }) =>
+      limit(async () => {
+        try {
+          // Validate URL exists and is not empty
+          if (!attachment.url || attachment.url.trim() === '') {
+            if (process.env.DEBUG) {
+              console.warn(`Skipping attachment with empty URL:`, {
+                id: attachment.id,
+                type: attachment.type,
+              });
+            }
+            return { status: 'skipped' as const, reason: 'empty-url' };
+          }
+
+          // Check for unsupported internal protocols
+          const url = attachment.url.trim();
+          if (url.startsWith('file-service://') || url.startsWith('sediment://')) {
+            if (process.env.DEBUG) {
+              console.warn(`Skipping attachment with internal protocol URL:`, {
+                id: attachment.id,
+                type: attachment.type,
+                protocol: url.split('://')[0] + '://',
+              });
+            }
+            return { status: 'skipped' as const, reason: 'unsupported-protocol' };
+          }
+
+          // Check if this media was already downloaded through the browser
+          const browserData = attachment.metadata?.browserDownloaded;
+
+          let downloadResult;
+          if (browserData && browserData.data) {
+            // Save browser-downloaded data directly
+            downloadResult = await this.saveMediaFromBuffer(
+              browserData.data,
+              browserData.mimeType || 'application/octet-stream',
+              attachment.type,
+              conversation.provider,
+              conversation.id,
+              true // Skip registry save - we'll batch save at the end
+            );
+          } else {
+            // Download via HTTP
+            downloadResult = await this.downloadMedia(
+              attachment.url,
+              attachment.type,
+              conversation.provider,
+              conversation.id,
+              cookies,
+              true // Skip registry save - we'll batch save at the end
+            );
+          }
+
+          // Update progress
+          completed++;
+          onProgress?.(completed, total);
+
+          return {
+            status: downloadResult.skipped ? ('skipped' as const) : ('downloaded' as const),
+            size: downloadResult.size,
+            reason: downloadResult.skipped ? 'already-exists' : undefined,
+          };
+        } catch (error) {
+          completed++;
+          onProgress?.(completed, total);
+
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+          // Log more details for debugging
+          console.error(`Media download error details:`, {
+            url: attachment.url || '(empty)',
+            urlLength: attachment.url?.length || 0,
             type: attachment.type,
+            hasBrowserData: !!attachment.metadata?.browserDownloaded,
+            error: errorMessage,
           });
-          result.skipped++;
-          continue;
+
+          return {
+            status: 'failed' as const,
+            error: errorMessage,
+            url: attachment.url || '(empty URL)',
+          };
         }
+      })
+    );
 
-        // Check for unsupported internal protocols
-        const url = attachment.url.trim();
-        if (url.startsWith('file-service://') || url.startsWith('sediment://')) {
-          if (process.env.DEBUG) {
-            console.warn(`Skipping attachment with internal protocol URL:`, {
-              id: attachment.id,
-              type: attachment.type,
-              protocol: url.split('://')[0] + '://',
-            });
-          }
-          result.skipped++;
-          continue;
-        }
+    // Wait for all downloads to complete
+    const results = await Promise.all(downloadTasks);
 
-        // Check if this media was already downloaded through the browser
-        const browserData = attachment.metadata?.browserDownloaded;
-
-        if (browserData && browserData.data) {
-          // Save browser-downloaded data directly
-          const downloadResult = await this.saveMediaFromBuffer(
-            browserData.data,
-            browserData.mimeType || 'application/octet-stream',
-            attachment.type,
-            conversation.provider,
-            conversation.id
-          );
-
-          if (downloadResult.skipped) {
-            result.skipped++;
-          } else {
-            result.downloaded++;
-            result.bytes += downloadResult.size;
-          }
-        } else {
-          // Download via HTTP
-          const downloadResult = await this.downloadMedia(
-            attachment.url,
-            attachment.type,
-            conversation.provider,
-            conversation.id,
-            cookies
-          );
-
-          if (downloadResult.skipped) {
-            result.skipped++;
-          } else {
-            result.downloaded++;
-            result.bytes += downloadResult.size;
-          }
-        }
-      } catch (error) {
+    // Aggregate results
+    for (const taskResult of results) {
+      if (taskResult.status === 'downloaded') {
+        result.downloaded++;
+        result.bytes += taskResult.size || 0;
+      } else if (taskResult.status === 'skipped') {
+        result.skipped++;
+      } else if (taskResult.status === 'failed') {
         result.failed++;
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-        // Log more details for debugging
-        console.error(`Media download error details:`, {
-          url: attachment.url || '(empty)',
-          urlLength: attachment.url?.length || 0,
-          type: attachment.type,
-          hasBrowserData: !!attachment.metadata?.browserDownloaded,
-          error: errorMessage,
-        });
-
         result.errors.push({
-          url: attachment.url || '(empty URL)',
-          error: errorMessage,
+          url: taskResult.url!,
+          error: taskResult.error!,
         });
       }
     }
+
+    // Save registry once at the end (batch update)
+    await this.saveRegistry();
 
     return result;
   }
@@ -164,7 +229,8 @@ export class MediaManager {
     mimeType: string,
     type: string,
     provider: string,
-    conversationId: string
+    conversationId: string,
+    skipRegistrySave = false
   ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
     // Calculate hash from buffer
     const hash = crypto.createHash('sha256').update(buffer).digest('hex');
@@ -175,7 +241,9 @@ export class MediaManager {
       // File already exists, just update references
       if (!this.registry[hash].references.includes(conversationId)) {
         this.registry[hash].references.push(conversationId);
-        await this.saveRegistry();
+        if (!skipRegistrySave) {
+          await this.saveRegistry();
+        }
       }
 
       return {
@@ -204,7 +272,9 @@ export class MediaManager {
       firstSeen: new Date().toISOString(),
       references: [conversationId],
     };
-    await this.saveRegistry();
+    if (!skipRegistrySave) {
+      await this.saveRegistry();
+    }
 
     return {
       path: permanentPath,
@@ -222,7 +292,8 @@ export class MediaManager {
     type: string,
     provider: string,
     conversationId: string,
-    cookies?: Record<string, string>
+    cookies?: Record<string, string>,
+    skipRegistrySave = false
   ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
     // Download to temp location first to calculate hash
     const tempPath = path.join(this.baseDir, '.temp', `download-${Date.now()}`);
@@ -237,7 +308,9 @@ export class MediaManager {
         // File already exists, just update references
         if (!this.registry[hash].references.includes(conversationId)) {
           this.registry[hash].references.push(conversationId);
-          await this.saveRegistry();
+          if (!skipRegistrySave) {
+            await this.saveRegistry();
+          }
         }
 
         // Clean up temp file
@@ -269,7 +342,9 @@ export class MediaManager {
         firstSeen: new Date().toISOString(),
         references: [conversationId],
       };
-      await this.saveRegistry();
+      if (!skipRegistrySave) {
+        await this.saveRegistry();
+      }
 
       return {
         path: permanentPath,
@@ -311,10 +386,10 @@ export class MediaManager {
 
     let response;
     try {
-      response = await axios.get(url, {
+      // Use pooled HTTP client for better performance
+      response = await this.getHttpClient().get(url, {
         responseType: 'stream',
         headers,
-        timeout: 60000,
         validateStatus: (status) => status < 500, // Don't throw on 4xx errors
       });
 
@@ -429,6 +504,22 @@ export class MediaManager {
   private async saveRegistry(): Promise<void> {
     await fs.mkdir(path.dirname(this.registryPath), { recursive: true });
     await fs.writeFile(this.registryPath, JSON.stringify(this.registry, null, 2), 'utf-8');
+  }
+
+  /**
+   * Close HTTP connections (call when done with media manager to free resources)
+   */
+  closeConnections(): void {
+    // Close all keep-alive connections to free resources
+    const httpAgent = this.httpClient?.defaults?.httpAgent as http.Agent;
+    const httpsAgent = this.httpClient?.defaults?.httpsAgent as https.Agent;
+
+    if (httpAgent) {
+      httpAgent.destroy();
+    }
+    if (httpsAgent) {
+      httpsAgent.destroy();
+    }
   }
 
   /**

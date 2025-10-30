@@ -45,6 +45,9 @@ export interface ArchiveOptions {
 
   /** Filter conversations by text search (searches title and preview) */
   searchQuery?: string;
+
+  /** Maximum number of conversations to process in parallel (default: 3) */
+  concurrency?: number;
 }
 
 export interface ArchiveResult {
