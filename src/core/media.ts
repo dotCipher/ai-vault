@@ -260,8 +260,17 @@ export class MediaManager {
     const fileName = `${hash}${extension}`;
     const permanentPath = path.join(this.baseDir, provider, 'media', mediaType, fileName);
 
+    // Ensure destination directory exists (handle race conditions with concurrent downloads)
+    try {
+      await fs.mkdir(path.dirname(permanentPath), { recursive: true });
+    } catch (error: any) {
+      // Ignore EEXIST errors (race condition - another download created it)
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
+    }
+
     // Write buffer to permanent location
-    await fs.mkdir(path.dirname(permanentPath), { recursive: true });
     await fs.writeFile(permanentPath, buffer);
 
     // Add to registry
@@ -330,9 +339,26 @@ export class MediaManager {
       const fileName = `${hash}${extension}`;
       const permanentPath = path.join(this.baseDir, provider, 'media', mediaType, fileName);
 
+      // Ensure destination directory exists (handle race conditions with concurrent downloads)
+      try {
+        await fs.mkdir(path.dirname(permanentPath), { recursive: true });
+      } catch (error: any) {
+        // Ignore EEXIST errors (race condition - another download created it)
+        if (error.code !== 'EEXIST') {
+          throw error;
+        }
+      }
+
       // Move file to permanent location
-      await fs.mkdir(path.dirname(permanentPath), { recursive: true });
-      await fs.rename(tempPath, permanentPath);
+      // Use copyFile + unlink instead of rename to handle cross-filesystem moves
+      try {
+        await fs.copyFile(tempPath, permanentPath);
+        await fs.unlink(tempPath);
+      } catch (error: any) {
+        // Clean up temp file on error
+        await fs.unlink(tempPath).catch(() => {});
+        throw error;
+      }
 
       // Add to registry
       this.registry[hash] = {
