@@ -116,5 +116,29 @@ export interface ConversationIndex {
     hasMedia: boolean;
     mediaCount: number;
     path: string;
+    // Hierarchy info for fast lookups
+    workspaceId?: string;
+    workspaceName?: string;
+    projectId?: string;
+    projectName?: string;
+    folder?: string;
   };
+}
+
+export interface HierarchyIndex {
+  /** Workspace ID → conversations and projects */
+  workspaces: {
+    [workspaceId: string]: {
+      name: string;
+      conversationIds: string[];
+      projects: {
+        [projectId: string]: {
+          name: string;
+          conversationIds: string[];
+        };
+      };
+    };
+  };
+  /** Conversations with no workspace/project */
+  unorganized: string[];
 }

@@ -11,7 +11,12 @@ import path from 'path';
 import zlib from 'zlib';
 import { promisify } from 'util';
 import type { Conversation, Asset, Workspace, Project } from '../types/index.js';
-import type { StorageConfig, ExportFormat, ConversationIndex } from '../types/storage.js';
+import type {
+  StorageConfig,
+  ExportFormat,
+  ConversationIndex,
+  HierarchyIndex,
+} from '../types/storage.js';
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -20,6 +25,7 @@ export class Storage {
   private config: StorageConfig;
   private batchMode: boolean = false;
   private pendingIndexUpdates: Map<string, Map<string, ConversationIndex[string]>> = new Map();
+  private pendingHierarchyUpdates: Map<string, Conversation[]> = new Map();
   private useCompression: boolean = false; // Disable compression by default for compatibility
 
   constructor(config: StorageConfig) {
@@ -41,6 +47,7 @@ export class Storage {
   enableBatchMode(): void {
     this.batchMode = true;
     this.pendingIndexUpdates.clear();
+    this.pendingHierarchyUpdates.clear();
   }
 
   /**
@@ -84,10 +91,16 @@ export class Storage {
       } else {
         await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
       }
+
+      // Update hierarchy index if there are pending hierarchy updates
+      if (this.pendingHierarchyUpdates.has(provider)) {
+        await this.updateHierarchyIndex(provider, this.pendingHierarchyUpdates.get(provider)!);
+      }
     }
 
     // Clear pending updates
     this.pendingIndexUpdates.clear();
+    this.pendingHierarchyUpdates.clear();
   }
 
   /**
@@ -176,9 +189,40 @@ export class Storage {
 
   /**
    * Get path to conversation directory
+   * Organizes by hierarchy (workspace/project) if present
    */
   getConversationPath(conversation: Conversation): string {
     const baseProviderDir = path.join(this.config.baseDir, conversation.provider);
+
+    // Organize by hierarchy if present
+    if (conversation.hierarchy) {
+      const { workspaceId, projectId } = conversation.hierarchy;
+
+      // Organize by workspace and optionally project
+      if (workspaceId) {
+        const workspaceDir = path.join(
+          baseProviderDir,
+          'workspaces',
+          this.sanitizeFilename(workspaceId)
+        );
+
+        if (projectId) {
+          // workspace/project/conversations/conversation-id
+          return path.join(
+            workspaceDir,
+            'projects',
+            this.sanitizeFilename(projectId),
+            'conversations',
+            this.sanitizeFilename(conversation.id)
+          );
+        }
+
+        // workspace/conversations/conversation-id
+        return path.join(workspaceDir, 'conversations', this.sanitizeFilename(conversation.id));
+      }
+    }
+
+    // Fall back to flat or date-based organization
     const conversationsDir = path.join(baseProviderDir, 'conversations');
 
     if (this.config.organizeByDate) {
@@ -271,7 +315,7 @@ export class Storage {
    * Update conversation index (batched if in batch mode, immediate otherwise)
    */
   private async updateIndex(conversation: Conversation, conversationPath: string): Promise<void> {
-    const indexEntry = {
+    const indexEntry: ConversationIndex[string] = {
       title: conversation.title,
       provider: conversation.provider,
       messageCount: conversation.messages.length,
@@ -283,12 +327,29 @@ export class Storage {
       path: path.relative(path.join(this.config.baseDir, conversation.provider), conversationPath),
     };
 
+    // Include hierarchy info if present
+    if (conversation.hierarchy) {
+      indexEntry.workspaceId = conversation.hierarchy.workspaceId;
+      indexEntry.workspaceName = conversation.hierarchy.workspaceName;
+      indexEntry.projectId = conversation.hierarchy.projectId;
+      indexEntry.projectName = conversation.hierarchy.projectName;
+      indexEntry.folder = conversation.hierarchy.folder;
+    }
+
     if (this.batchMode) {
       // Queue update for later batch save
       if (!this.pendingIndexUpdates.has(conversation.provider)) {
         this.pendingIndexUpdates.set(conversation.provider, new Map());
       }
       this.pendingIndexUpdates.get(conversation.provider)!.set(conversation.id, indexEntry);
+
+      // Track hierarchy updates separately
+      if (conversation.hierarchy) {
+        if (!this.pendingHierarchyUpdates.has(conversation.provider)) {
+          this.pendingHierarchyUpdates.set(conversation.provider, []);
+        }
+        this.pendingHierarchyUpdates.get(conversation.provider)!.push(conversation);
+      }
     } else {
       // Immediate save (legacy behavior)
       const indexPath = path.join(this.config.baseDir, conversation.provider, 'index.json');
@@ -310,7 +371,128 @@ export class Storage {
       } else {
         await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
       }
+
+      // Update hierarchy index if conversation has hierarchy
+      if (conversation.hierarchy) {
+        await this.updateHierarchyIndex(conversation.provider, [conversation]);
+      }
     }
+  }
+
+  /**
+   * Update hierarchy index for a provider
+   * Builds or updates the hierarchy-index.json file
+   */
+  private async updateHierarchyIndex(
+    provider: string,
+    conversations: Conversation[]
+  ): Promise<void> {
+    const hierarchyPath = path.join(this.config.baseDir, provider, 'hierarchy-index.json');
+
+    // Load existing hierarchy index
+    let hierarchyIndex: HierarchyIndex = {
+      workspaces: {},
+      unorganized: [],
+    };
+
+    if (existsSync(hierarchyPath)) {
+      const content = await fs.readFile(hierarchyPath, 'utf-8');
+      hierarchyIndex = JSON.parse(content);
+    }
+
+    // Update with new conversations
+    for (const conversation of conversations) {
+      if (!conversation.hierarchy || !conversation.hierarchy.workspaceId) {
+        // Track as unorganized (if not already present)
+        if (!hierarchyIndex.unorganized.includes(conversation.id)) {
+          hierarchyIndex.unorganized.push(conversation.id);
+        }
+        continue;
+      }
+
+      const { workspaceId, workspaceName, projectId, projectName } = conversation.hierarchy;
+
+      // Initialize workspace if needed
+      if (!hierarchyIndex.workspaces[workspaceId]) {
+        hierarchyIndex.workspaces[workspaceId] = {
+          name: workspaceName || workspaceId,
+          conversationIds: [],
+          projects: {},
+        };
+      }
+
+      const workspace = hierarchyIndex.workspaces[workspaceId];
+
+      // Update workspace name if changed
+      if (workspaceName && workspace.name !== workspaceName) {
+        workspace.name = workspaceName;
+      }
+
+      if (projectId) {
+        // Initialize project if needed
+        if (!workspace.projects[projectId]) {
+          workspace.projects[projectId] = {
+            name: projectName || projectId,
+            conversationIds: [],
+          };
+        }
+
+        const project = workspace.projects[projectId];
+
+        // Update project name if changed
+        if (projectName && project.name !== projectName) {
+          project.name = projectName;
+        }
+
+        // Add conversation to project (if not already present)
+        if (!project.conversationIds.includes(conversation.id)) {
+          project.conversationIds.push(conversation.id);
+        }
+
+        // Remove from workspace-level if present
+        workspace.conversationIds = workspace.conversationIds.filter(
+          (id) => id !== conversation.id
+        );
+      } else {
+        // Add to workspace-level conversations (if not already present)
+        if (!workspace.conversationIds.includes(conversation.id)) {
+          workspace.conversationIds.push(conversation.id);
+        }
+
+        // Remove from any project if present
+        for (const projectId in workspace.projects) {
+          workspace.projects[projectId].conversationIds = workspace.projects[
+            projectId
+          ].conversationIds.filter((id) => id !== conversation.id);
+        }
+      }
+
+      // Remove from unorganized if present
+      hierarchyIndex.unorganized = hierarchyIndex.unorganized.filter(
+        (id) => id !== conversation.id
+      );
+    }
+
+    // Save hierarchy index
+    await fs.mkdir(path.dirname(hierarchyPath), { recursive: true });
+    await fs.writeFile(hierarchyPath, JSON.stringify(hierarchyIndex, null, 2), 'utf-8');
+  }
+
+  /**
+   * Get hierarchy index for a provider
+   */
+  async getHierarchyIndex(provider: string): Promise<HierarchyIndex> {
+    const hierarchyPath = path.join(this.config.baseDir, provider, 'hierarchy-index.json');
+
+    if (!existsSync(hierarchyPath)) {
+      return {
+        workspaces: {},
+        unorganized: [],
+      };
+    }
+
+    const content = await fs.readFile(hierarchyPath, 'utf-8');
+    return JSON.parse(content);
   }
 
   /**

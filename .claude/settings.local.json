@@ -13,7 +13,9 @@
       "Read(//Users/codymoore/.ssh/**)",
       "Bash(npm install:*)",
       "Bash(cat:*)",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Bash(gh run watch:*)",
+      "Read(//Users/codymoore/ai-vault-data/grok-web/**)"
     ],
     "deny": [],
     "ask": []
