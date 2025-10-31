@@ -284,11 +284,33 @@ export class GrokWebProvider extends BaseProvider {
 
         // Extract hierarchy information from API metadata
         const hierarchy: any = {};
-        if (metadata.workspaceId || metadata.workspace) {
+
+        // Check if conversation is in any workspaces (Grok uses "workspaces" array)
+        if (
+          metadata.workspaces &&
+          Array.isArray(metadata.workspaces) &&
+          metadata.workspaces.length > 0
+        ) {
+          // Use the first workspace (conversations can be in multiple workspaces)
+          const workspace = metadata.workspaces[0];
+          if (typeof workspace === 'string') {
+            // If it's a workspace ID string
+            hierarchy.workspaceId = workspace;
+          } else if (workspace && typeof workspace === 'object') {
+            // If it's a workspace object
+            hierarchy.workspaceId = workspace.id || workspace.workspaceId;
+            hierarchy.workspaceName = workspace.name || workspace.title;
+          }
+        }
+
+        // Check for single workspace field (backup)
+        if (!hierarchy.workspaceId && (metadata.workspaceId || metadata.workspace)) {
           hierarchy.workspaceId = metadata.workspaceId || metadata.workspace?.id;
           hierarchy.workspaceName =
             metadata.workspaceName || metadata.workspace?.name || metadata.workspace?.title;
         }
+
+        // Check for project info
         if (metadata.projectId || metadata.project) {
           hierarchy.projectId = metadata.projectId || metadata.project?.id;
           hierarchy.projectName =
