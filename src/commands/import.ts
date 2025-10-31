@@ -160,6 +160,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
 
     // Save conversations using archiver
     const archiver = createArchiver(archiveDir);
+    await archiver.init();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storage = (archiver as any).storage; // Access storage from archiver
 

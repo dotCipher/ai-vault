@@ -26,6 +26,13 @@ export class Archiver {
   }
 
   /**
+   * Initialize the archiver (load registries from disk)
+   */
+  async init(): Promise<void> {
+    await this.mediaManager.init();
+  }
+
+  /**
    * Archive conversations from a provider
    */
   async archive(provider: Provider, options: ArchiveOptions = {}): Promise<ArchiveResult> {

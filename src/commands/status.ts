@@ -144,6 +144,7 @@ async function checkProviderStatus(
     }
 
     const archiver = createArchiver(archiveDir);
+    await archiver.init();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storage = (archiver as any).storage;
     const localIndex = await storage.getIndex(providerName);

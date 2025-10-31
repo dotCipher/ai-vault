@@ -156,6 +156,7 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
   }
 
   const archiver = createArchiver(archiveDir);
+  await archiver.init();
 
   try {
     // Capture stats before archiving (for data diff)
