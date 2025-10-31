@@ -10,7 +10,12 @@
  */
 
 import { BaseProvider } from '../base.js';
-import type { ProviderConfig, Conversation, Message } from '../../types/index.js';
+import type {
+  ProviderConfig,
+  Conversation,
+  Message,
+  ConversationHierarchy,
+} from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError } from '../../types/provider.js';
 import { BrowserScraper } from '../../utils/scraper.js';
@@ -446,6 +451,15 @@ export class ChatGPTProvider extends BaseProvider {
         }
       }
 
+      // Extract hierarchy information if available
+      const hierarchy: any = {};
+      const projectName = this.conversationProjects.get(id);
+      if (projectName) {
+        hierarchy.projectName = projectName;
+        // ChatGPT uses projects for organization (not workspaces)
+        hierarchy.projectId = projectName; // Use name as ID since API doesn't provide separate ID
+      }
+
       return {
         id,
         provider: this.name,
@@ -462,6 +476,8 @@ export class ChatGPTProvider extends BaseProvider {
           characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
           mediaCount: messages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
         },
+        hierarchy:
+          Object.keys(hierarchy).length > 0 ? (hierarchy as ConversationHierarchy) : undefined,
       };
     } catch (error) {
       await page.close();
