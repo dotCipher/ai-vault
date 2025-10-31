@@ -1,3 +1,9 @@
+## [1.10.2](https://github.com/dotCipher/ai-vault/compare/v1.10.1...v1.10.2) (2025-10-31)
+
+### Bug Fixes
+
+- load media registry from disk before archiving ([761b6c9](https://github.com/dotCipher/ai-vault/commit/761b6c9ca2413dd3360dc7523c7e5468d6d677cd))
+
 ## [1.10.1](https://github.com/dotCipher/ai-vault/compare/v1.10.0...v1.10.1) (2025-10-30)
 
 ### Bug Fixes
