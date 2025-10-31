@@ -1,3 +1,9 @@
+## [1.10.3](https://github.com/dotCipher/ai-vault/compare/v1.10.2...v1.10.3) (2025-10-31)
+
+### Bug Fixes
+
+- handle race conditions in parallel media downloads ([9a1b2da](https://github.com/dotCipher/ai-vault/commit/9a1b2da1c76e9f1c118d6855c6561b3330bc340d))
+
 ## [1.10.2](https://github.com/dotCipher/ai-vault/compare/v1.10.1...v1.10.2) (2025-10-31)
 
 ### Bug Fixes
