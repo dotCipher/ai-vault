@@ -16,6 +16,7 @@ import { BaseProvider } from '../base.js';
 import type {
   ProviderConfig,
   Conversation,
+  ConversationHierarchy,
   Message,
   Attachment,
   Asset,
@@ -281,6 +282,19 @@ export class GrokWebProvider extends BaseProvider {
           return msg;
         });
 
+        // Extract hierarchy information from API metadata
+        const hierarchy: any = {};
+        if (metadata.workspaceId || metadata.workspace) {
+          hierarchy.workspaceId = metadata.workspaceId || metadata.workspace?.id;
+          hierarchy.workspaceName =
+            metadata.workspaceName || metadata.workspace?.name || metadata.workspace?.title;
+        }
+        if (metadata.projectId || metadata.project) {
+          hierarchy.projectId = metadata.projectId || metadata.project?.id;
+          hierarchy.projectName =
+            metadata.projectName || metadata.project?.name || metadata.project?.title;
+        }
+
         return {
           id,
           provider: this.name,
@@ -297,6 +311,9 @@ export class GrokWebProvider extends BaseProvider {
             characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
             mediaCount: messages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
           },
+          // Add hierarchy if any workspace/project info found
+          hierarchy:
+            Object.keys(hierarchy).length > 0 ? (hierarchy as ConversationHierarchy) : undefined,
         };
       }
 
@@ -626,6 +643,21 @@ export class GrokWebProvider extends BaseProvider {
         ? new Date(apiData.metadata.modifyTime)
         : messages[messages.length - 1]?.timestamp || new Date();
 
+      // Extract hierarchy information from API metadata (if available from scraping fallback)
+      const hierarchy: any = {};
+      if (apiData?.metadata) {
+        const meta = apiData.metadata;
+        if (meta.workspaceId || meta.workspace) {
+          hierarchy.workspaceId = meta.workspaceId || meta.workspace?.id;
+          hierarchy.workspaceName =
+            meta.workspaceName || meta.workspace?.name || meta.workspace?.title;
+        }
+        if (meta.projectId || meta.project) {
+          hierarchy.projectId = meta.projectId || meta.project?.id;
+          hierarchy.projectName = meta.projectName || meta.project?.name || meta.project?.title;
+        }
+      }
+
       return {
         id,
         provider: this.name,
@@ -638,6 +670,9 @@ export class GrokWebProvider extends BaseProvider {
           characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
           mediaCount: messages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
         },
+        // Add hierarchy if any workspace/project info found
+        hierarchy:
+          Object.keys(hierarchy).length > 0 ? (hierarchy as ConversationHierarchy) : undefined,
       };
     } catch (error) {
       await page.close();
