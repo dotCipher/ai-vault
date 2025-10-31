@@ -1,3 +1,9 @@
+## [1.10.4](https://github.com/dotCipher/ai-vault/compare/v1.10.3...v1.10.4) (2025-10-31)
+
+### Bug Fixes
+
+- remove duplicate progress counters in archive output ([12ed200](https://github.com/dotCipher/ai-vault/commit/12ed2003bf5ae5f5c7ed17546559b76a904b493d))
+
 ## [1.10.3](https://github.com/dotCipher/ai-vault/compare/v1.10.2...v1.10.3) (2025-10-31)
 
 ### Bug Fixes
