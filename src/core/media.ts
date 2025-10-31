@@ -355,8 +355,10 @@ export class MediaManager {
         await fs.copyFile(tempPath, permanentPath);
         await fs.unlink(tempPath);
       } catch (error: any) {
-        // Clean up temp file on error
-        await fs.unlink(tempPath).catch(() => {});
+        // Clean up temp file on error (check existence first)
+        if (existsSync(tempPath)) {
+          await fs.unlink(tempPath).catch(() => {});
+        }
         throw error;
       }
 
