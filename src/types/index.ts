@@ -77,6 +77,7 @@ export interface Conversation {
   createdAt: Date;
   updatedAt: Date;
   metadata: ConversationMetadata;
+  hierarchy?: ConversationHierarchy; // Organizational structure
 }
 
 export interface ConversationMetadata {
@@ -88,6 +89,60 @@ export interface ConversationMetadata {
   characterCount: number;
   mediaCount: number;
   [key: string]: any;
+}
+
+// ========== Hierarchy Types ==========
+
+/**
+ * Generic organizational container (workspace, project, folder, etc.)
+ * Platform-agnostic way to represent nested organizational structures
+ */
+export interface OrganizationalContainer {
+  type: 'workspace' | 'project' | 'folder' | 'category';
+  id?: string;
+  name: string;
+  parent?: OrganizationalContainer; // For nested structures
+}
+
+/**
+ * Tracks where a conversation is organized within the provider's structure
+ * Supports tracking moves over time
+ */
+export interface ConversationHierarchy {
+  // Flattened structure for common cases
+  workspaceId?: string;
+  workspaceName?: string;
+  projectId?: string;
+  projectName?: string;
+  folder?: string; // For providers with simple folder structure
+
+  // Nested structure for complex hierarchies
+  containers?: OrganizationalContainer[];
+
+  // Track organizational changes
+  lastMovedAt?: Date;
+  moveHistory?: HierarchyMove[];
+}
+
+/**
+ * Record of a conversation being moved between organizational containers
+ */
+export interface HierarchyMove {
+  timestamp: Date;
+  from: {
+    workspaceId?: string;
+    workspaceName?: string;
+    projectId?: string;
+    projectName?: string;
+    folder?: string;
+  };
+  to: {
+    workspaceId?: string;
+    workspaceName?: string;
+    projectId?: string;
+    projectName?: string;
+    folder?: string;
+  };
 }
 
 // ========== Assets & Workspaces Types ==========
