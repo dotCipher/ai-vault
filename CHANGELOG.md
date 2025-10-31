@@ -1,3 +1,9 @@
+## [1.10.5](https://github.com/dotCipher/ai-vault/compare/v1.10.4...v1.10.5) (2025-10-31)
+
+### Bug Fixes
+
+- check temp file existence before cleanup in media downloads ([#9](https://github.com/dotCipher/ai-vault/issues/9)) ([f4d42ac](https://github.com/dotCipher/ai-vault/commit/f4d42acb7ae2f13b8e0c9bd0354126afc00f504b))
+
 ## [1.10.4](https://github.com/dotCipher/ai-vault/compare/v1.10.3...v1.10.4) (2025-10-31)
 
 ### Bug Fixes
