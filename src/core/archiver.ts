@@ -189,9 +189,7 @@ export class Archiver {
                 if (remoteUpdated <= localUpdated + 1000) {
                   completed++;
                   console.log(
-                    chalk.gray(
-                      `${progress} [${completed}/${total}] Skipped: ${summary.title} (up-to-date)`
-                    )
+                    chalk.gray(`[${completed}/${total}] Skipped: ${summary.title} (up-to-date)`)
                   );
                   return { status: 'skipped' as const, summary };
                 }
@@ -216,7 +214,7 @@ export class Archiver {
               completed++;
               console.log(
                 chalk.yellow(
-                  `${progress} [${completed}/${total}] [DRY RUN] Would archive: ${conversation.title}`
+                  `[${completed}/${total}] [DRY RUN] Would archive: ${conversation.title}`
                 )
               );
               return { status: 'archived' as const, summary, conversation };
@@ -257,9 +255,7 @@ export class Archiver {
             }
 
             completed++;
-            console.log(
-              chalk.green(`${progress} [${completed}/${total}] ✓ Archived: ${conversation.title}\n`)
-            );
+            console.log(chalk.green(`[${completed}/${total}] ✓ Archived: ${conversation.title}\n`));
             return {
               status: 'archived' as const,
               summary,
@@ -275,9 +271,7 @@ export class Archiver {
               const newConcurrency = rateLimiter.getConcurrency();
 
               console.log(
-                chalk.yellow(
-                  `${progress} [${completed}/${total}] ⚠ Rate limited: ${summary.title}`
-                )
+                chalk.yellow(`[${completed}/${total}] ⚠ Rate limited: ${summary.title}`)
               );
               console.log(
                 chalk.yellow(
@@ -306,9 +300,7 @@ export class Archiver {
             // Handle other errors
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.log(
-              chalk.red(
-                `${progress} [${completed}/${total}] ✗ Failed: ${summary.title} - ${errorMessage}\n`
-              )
+              chalk.red(`[${completed}/${total}] ✗ Failed: ${summary.title} - ${errorMessage}\n`)
             );
 
             return {
