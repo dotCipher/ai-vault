@@ -80,6 +80,7 @@ describe('Archiver', () => {
 
     // Mock MediaManager
     mockMediaManager = {
+      init: vi.fn().mockResolvedValue(undefined),
       downloadConversationMedia: vi.fn().mockResolvedValue({
         downloaded: 0,
         skipped: 0,
