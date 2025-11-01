@@ -84,7 +84,9 @@ count_messages() {
   # Count from markdown files (count User and Assistant headers)
   for conv in $(find "$dir" -name "conversation.md" 2>/dev/null); do
     # Count messages by looking for "## User" and "## Assistant" headers
-    local msg_count=$(grep -cE "^## (User|Assistant)" "$conv" 2>/dev/null || echo 0)
+    # Note: grep -c exits with 1 when count is 0, so we use || true and default to 0
+    local msg_count=$(grep -cE "^## (User|Assistant)" "$conv" 2>/dev/null || true)
+    msg_count=${msg_count:-0}
     count=$((count + msg_count))
   done
   echo $count
