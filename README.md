@@ -24,14 +24,14 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ### Supported Platforms
 
-| Platform            | Status      | Native Import | Web Scraping | Media Download |
-| ------------------- | ----------- | ------------- | ------------ | -------------- |
-| **Grok (grok.com)** | ✅ Complete | ✅            | ✅           | ✅             |
-| **Grok on X**       | ✅ Complete | ❌            | ✅           | ✅             |
-| **ChatGPT**         | ✅ Complete | ✅            | ✅           | ✅             |
-| **Claude**          | 📋 Planned  | ✅            | ✅           | ✅             |
-| **Gemini**          | 📋 Planned  | ✅            | ✅           | ✅             |
-| **Perplexity**      | 📋 Planned  | ❌            | ✅           | ✅             |
+| Platform            | Status      | Native Import | Backend API | Media Download |
+| ------------------- | ----------- | ------------- | ----------- | -------------- |
+| **Grok (grok.com)** | ✅ Complete | ✅            | ✅          | ✅             |
+| **Grok on X**       | ✅ Complete | ❌            | ✅          | ✅             |
+| **ChatGPT**         | ✅ Complete | ✅            | ✅          | ✅             |
+| **Claude**          | 📋 Planned  | ✅            | ✅          | ✅             |
+| **Gemini**          | 📋 Planned  | ✅            | ✅          | ✅             |
+| **Perplexity**      | 📋 Planned  | ❌            | ✅          | ✅             |
 
 **Note:** Grok has two separate providers due to separate account systems:
 

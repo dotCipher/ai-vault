@@ -305,7 +305,9 @@ export class MediaManager {
     skipRegistrySave = false
   ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
     // Download to temp location first to calculate hash
-    const tempPath = path.join(this.baseDir, '.temp', `download-${Date.now()}`);
+    // Use timestamp + random bytes to ensure uniqueness with concurrent downloads
+    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    const tempPath = path.join(this.baseDir, '.temp', `download-${Date.now()}-${randomSuffix}`);
     await fs.mkdir(path.dirname(tempPath), { recursive: true });
 
     try {
