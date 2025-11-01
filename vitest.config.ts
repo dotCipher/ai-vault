@@ -5,6 +5,16 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Prevent hanging processes
+    testTimeout: 30000, // 30s max per test
+    hookTimeout: 30000, // 30s max for hooks
+    pool: 'forks', // Use fork pool for better cleanup
+    poolOptions: {
+      forks: {
+        singleFork: false,
+        maxForks: 4, // Limit concurrent worker processes
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
