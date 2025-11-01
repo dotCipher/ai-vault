@@ -1,3 +1,9 @@
+## [1.12.1](https://github.com/dotCipher/ai-vault/compare/v1.12.0...v1.12.1) (2025-11-01)
+
+### Bug Fixes
+
+- prevent vitest worker processes from hanging ([74407f1](https://github.com/dotCipher/ai-vault/commit/74407f19907feaebcae6d3ceaff7e47da27a4e37))
+
 # [1.12.0](https://github.com/dotCipher/ai-vault/compare/v1.11.1...v1.12.0) (2025-11-01)
 
 ### Features
