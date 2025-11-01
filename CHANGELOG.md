@@ -1,3 +1,9 @@
+# [1.11.0](https://github.com/dotCipher/ai-vault/compare/v1.10.5...v1.11.0) (2025-11-01)
+
+### Features
+
+- platform-agnostic hierarchy tracking for conversations ([#10](https://github.com/dotCipher/ai-vault/issues/10)) ([0132c7b](https://github.com/dotCipher/ai-vault/commit/0132c7b7c18f990eb22c97c41e3580139479d68d))
+
 ## [1.10.5](https://github.com/dotCipher/ai-vault/compare/v1.10.4...v1.10.5) (2025-10-31)
 
 ### Bug Fixes
