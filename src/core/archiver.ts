@@ -33,6 +33,13 @@ export class Archiver {
   }
 
   /**
+   * Get the storage instance (used by import command)
+   */
+  getStorage(): Storage {
+    return this.storage;
+  }
+
+  /**
    * Archive conversations from a provider
    */
   async archive(provider: Provider, options: ArchiveOptions = {}): Promise<ArchiveResult> {
@@ -201,9 +208,40 @@ export class Archiver {
               }
             }
 
-            // Fetch full conversation
+            // Fetch full conversation with retry logic for timeouts
             const fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
-            const conversation = await provider.fetchConversation(summary.id);
+            let conversation;
+            const maxRetries = 3;
+            let lastError;
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+              try {
+                if (attempt > 1) {
+                  const backoffDelay = Math.min(1000 * Math.pow(2, attempt - 2), 8000); // 1s, 2s, 4s
+                  fetchSpinner.text = `${progress} Retrying (${attempt}/${maxRetries}): ${summary.title}`;
+                  await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+                }
+                conversation = await provider.fetchConversation(summary.id);
+                break; // Success - exit retry loop
+              } catch (error) {
+                lastError = error;
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                const isTimeout =
+                  errorMessage.includes('Timeout') || errorMessage.includes('timeout');
+
+                if (isTimeout && attempt < maxRetries) {
+                  fetchSpinner.text = `${progress} Timeout - will retry: ${summary.title}`;
+                  continue; // Retry on timeout
+                } else {
+                  throw error; // Non-timeout error or max retries reached
+                }
+              }
+            }
+
+            if (!conversation) {
+              throw lastError || new Error('Failed to fetch conversation after retries');
+            }
+
             fetchSpinner.stop(); // Stop silently - final "Archived" message will confirm success
 
             // Record successful operation

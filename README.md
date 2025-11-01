@@ -20,6 +20,23 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 - 🏠 **Local-first** - Your data stays on your machine, encrypted and secure
 - 🔌 **Plugin architecture** - Easy to extend with new providers
 
+---
+
+> ### 🏆 **Archive > Export**
+>
+> **Our archive feature can capture MORE data than some providers' native exports.**
+>
+> In benchmarks performed November 2025, we found that AI Vault's archive functionality retrieved **5x more media files** (166 vs 33) compared to a major provider's official export feature. While native exports are useful for quick imports, our live archiving directly from APIs ensures you get:
+>
+> - ✅ Complete media libraries (all images, files, and generated content)
+> - ✅ Real-time metadata and conversation state
+> - ✅ Workspace/project hierarchy information
+> - ✅ Assets that may not be included in ZIP exports
+>
+> **Recommendation:** Use `archive` for comprehensive backups, `import` for quick migration from official exports.
+
+---
+
 ## ✨ Features
 
 ### Supported Platforms
