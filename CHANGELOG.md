@@ -1,3 +1,9 @@
+# [1.13.0](https://github.com/dotCipher/ai-vault/compare/v1.12.2...v1.13.0) (2025-11-01)
+
+### Features
+
+- **chatgpt:** automatically unarchive archived conversations during archiving ([3b48ed4](https://github.com/dotCipher/ai-vault/commit/3b48ed4eed26d55c95dd462117e400cbaa794887))
+
 ## [1.12.2](https://github.com/dotCipher/ai-vault/compare/v1.12.1...v1.12.2) (2025-11-01)
 
 ### Bug Fixes
