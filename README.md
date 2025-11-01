@@ -592,6 +592,9 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
   - [x] **Media support**: Images (uploaded & DALL-E), videos, documents
   - [x] **Backend API integration**: Reliable conversation fetching with full attachment metadata
   - [x] **Automatic unarchiving**: Automatically unarchives archived conversations during archiving to ensure complete backup coverage
+  - [x] **Comprehensive media coverage**: 96.1% media coverage with bearer token auth, pagination, and two-step downloads
+  - [x] **Image detection**: Full support for image_asset_pointer content type (DALL-E, uploads, screenshots)
+  - [x] **Pagination**: Fetches all conversations beyond 100-item API limit
 - [x] Smart filtering system:
   - [x] Date range filtering (since/until)
   - [x] Search query filtering (title/preview)
