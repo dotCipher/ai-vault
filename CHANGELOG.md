@@ -1,3 +1,9 @@
+## [1.12.2](https://github.com/dotCipher/ai-vault/compare/v1.12.1...v1.12.2) (2025-11-01)
+
+### Bug Fixes
+
+- validation script grep exit code handling ([a63c0f5](https://github.com/dotCipher/ai-vault/commit/a63c0f5f329713c4aa9421db9fdac93747413624))
+
 ## [1.12.1](https://github.com/dotCipher/ai-vault/compare/v1.12.0...v1.12.1) (2025-11-01)
 
 ### Bug Fixes
