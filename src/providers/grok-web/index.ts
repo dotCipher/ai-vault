@@ -144,7 +144,7 @@ export class GrokWebProvider extends BaseProvider {
     try {
       // Navigate to the conversation page first to establish proper session context
       const url = `https://grok.com/chat/${id}`;
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
       // Wait for page to be ready
       await page.waitForTimeout(2000);

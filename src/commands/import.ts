@@ -127,7 +127,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
     switch (provider.toLowerCase()) {
       case 'grok':
       case 'grok-web':
-        ({ conversations, mediaDir: sourceMediaDir } = await importGrok(processPath));
+        ({ conversations, mediaDir: sourceMediaDir } = await importGrok(processPath, provider));
         break;
       case 'chatgpt':
         ({ conversations, mediaDir: sourceMediaDir } = await importChatGPT(processPath));
@@ -161,8 +161,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
     // Save conversations using archiver
     const archiver = createArchiver(archiveDir);
     await archiver.init();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const storage = (archiver as any).storage; // Access storage from archiver
+    const storage = archiver.getStorage(); // Access storage from archiver
 
     // Capture stats before importing (for data diff)
     const beforeSnapshot = await captureSnapshot(storage, provider);
@@ -178,8 +177,9 @@ export async function importCommand(options: ImportOptions): Promise<void> {
         await storage.saveConversation(conversation);
         imported++;
         spinner.message(`Imported ${imported}/${conversations.length}...`);
-      } catch {
+      } catch (error) {
         errors++;
+        console.error(`Failed to save conversation ${conversation.id}:`, error);
       }
     }
 
@@ -266,19 +266,36 @@ export async function importCommand(options: ImportOptions): Promise<void> {
  * Import from Grok's native export format
  */
 async function importGrok(
-  filePath: string
+  filePath: string,
+  providerName: string = 'grok'
 ): Promise<{ conversations: Conversation[]; mediaDir?: string }> {
   const spinner = clack.spinner();
   spinner.start('Reading Grok export...');
 
   const stat = statSync(filePath);
+  // Helper function to recursively find a file
+  function findFileRecursive(dir: string, pattern: (filename: string) => boolean): string | null {
+    const files = readdirSync(dir);
+    for (const file of files) {
+      const fullPath = join(dir, file);
+      const stat = statSync(fullPath);
+      if (stat.isDirectory()) {
+        const found = findFileRecursive(fullPath, pattern);
+        if (found) return found;
+      } else if (pattern(file)) {
+        return fullPath;
+      }
+    }
+    return null;
+  }
+
   let jsonFile: string;
   let mediaDir: string | undefined;
 
   if (stat.isDirectory()) {
-    // Export is a directory - find the JSON file
-    const files = readdirSync(filePath);
-    const grokJson = files.find(
+    // Export is a directory - find the JSON file recursively
+    const grokJson = findFileRecursive(
+      filePath,
       (f) => f.includes('grok-backend') || f.includes('prod-grok-backend')
     );
 
@@ -287,13 +304,30 @@ async function importGrok(
       throw new Error('Could not find Grok backend JSON file in export directory');
     }
 
-    jsonFile = join(filePath, grokJson);
+    jsonFile = grokJson;
 
-    // Check for media directory
-    const assetDir = files.find((f) => f.includes('asset-server') || f.includes('mc-asset-server'));
-    if (assetDir) {
-      mediaDir = join(filePath, assetDir);
+    // Check for media directory recursively
+    function findDirRecursive(dir: string, pattern: (dirname: string) => boolean): string | null {
+      const files = readdirSync(dir);
+      for (const file of files) {
+        const fullPath = join(dir, file);
+        const stat = statSync(fullPath);
+        if (stat.isDirectory()) {
+          if (pattern(file)) {
+            return fullPath;
+          }
+          const found = findDirRecursive(fullPath, pattern);
+          if (found) return found;
+        }
+      }
+      return null;
     }
+
+    mediaDir =
+      findDirRecursive(
+        filePath,
+        (f) => f.includes('asset-server') || f.includes('mc-asset-server')
+      ) || undefined;
   } else {
     // Single JSON file
     jsonFile = filePath;
@@ -332,7 +366,7 @@ async function importGrok(
 
     const conversation: Conversation = {
       id: conv.id,
-      provider: 'grok',
+      provider: providerName,
       title: conv.title || 'Untitled',
       messages,
       createdAt: new Date(conv.create_time),
