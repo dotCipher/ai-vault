@@ -162,58 +162,79 @@ export class ChatGPTProvider extends BaseProvider {
         accessToken = result.token;
       }
 
-      // Use backend API to fetch both conversations and projects
-      const limit = options.limit || 100;
-      const conversationsUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=false&is_starred=false`;
-      const archivedConversationsUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=true&is_starred=false`;
+      // Use backend API to fetch both conversations and projects with pagination
+      const limit = 100; // API limit per request
+      const requestedLimit = options.limit; // User-requested limit (optional)
       const projectsUrl = `https://chatgpt.com/backend-api/gizmos/snorlax/sidebar?conversations_per_gizmo=20&owned_only=true`;
 
       const response = await page.evaluate(
-        async ({ conversationsUrl, archivedConversationsUrl, projectsUrl, token }) => {
+        async ({ limit, requestedLimit, projectsUrl, token }) => {
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           };
 
-          // Fetch regular conversations
-          const conversationsRes = await fetch(conversationsUrl, {
-            method: 'GET',
-            credentials: 'include',
-            headers,
-          });
+          // Helper function to fetch all conversations with pagination
+          const fetchAllConversations = async (isArchived: boolean) => {
+            const allItems: any[] = [];
+            let offset = 0;
+            let hasMore = true;
 
-          if (!conversationsRes.ok) {
-            throw new Error(
-              `API request failed: ${conversationsRes.status} ${conversationsRes.statusText}`
-            );
-          }
+            while (hasMore) {
+              const url = `https://chatgpt.com/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated&is_archived=${isArchived}&is_starred=false`;
 
-          const conversationsData = await conversationsRes.json();
+              const res = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                headers,
+              });
 
-          // Fetch archived conversations
-          const archivedConversationsRes = await fetch(archivedConversationsUrl, {
-            method: 'GET',
-            credentials: 'include',
-            headers,
-          });
-
-          let archivedConversationsData = null;
-          if (archivedConversationsRes.ok) {
-            archivedConversationsData = await archivedConversationsRes.json();
-
-            // Unarchive all archived conversations
-            const archivedItems = archivedConversationsData?.items || [];
-            for (const conv of archivedItems) {
-              try {
-                await fetch(`https://chatgpt.com/backend-api/conversation/${conv.id}`, {
-                  method: 'PATCH',
-                  credentials: 'include',
-                  headers,
-                  body: JSON.stringify({ is_archived: false }),
-                });
-              } catch (err) {
-                console.error(`Failed to unarchive conversation ${conv.id}:`, err);
+              if (!res.ok) {
+                if (offset === 0) {
+                  throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+                }
+                // If not first page, just stop pagination
+                break;
               }
+
+              const data = await res.json();
+              const items = data?.items || [];
+
+              if (items.length === 0) {
+                break;
+              }
+
+              allItems.push(...items);
+
+              // Check if we've fetched all or reached user's requested limit
+              hasMore = items.length === limit && data.has_missing_conversations !== false;
+              if (requestedLimit && allItems.length >= requestedLimit) {
+                hasMore = false;
+              }
+
+              offset += limit;
+            }
+
+            return allItems;
+          };
+
+          // Fetch all regular conversations
+          const regularConversations = await fetchAllConversations(false);
+
+          // Fetch all archived conversations
+          const archivedConversations = await fetchAllConversations(true);
+
+          // Unarchive all archived conversations
+          for (const conv of archivedConversations) {
+            try {
+              await fetch(`https://chatgpt.com/backend-api/conversation/${conv.id}`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers,
+                body: JSON.stringify({ is_archived: false }),
+              });
+            } catch (err) {
+              console.error(`Failed to unarchive conversation ${conv.id}:`, err);
             }
           }
 
@@ -234,12 +255,12 @@ export class ChatGPTProvider extends BaseProvider {
           }
 
           return {
-            conversations: conversationsData,
-            archivedConversations: archivedConversationsData,
+            conversations: { items: regularConversations },
+            archivedConversations: { items: archivedConversations },
             projects: projectsData,
           };
         },
-        { conversationsUrl, archivedConversationsUrl, projectsUrl, token: accessToken }
+        { limit, requestedLimit, projectsUrl, token: accessToken }
       );
 
       await page.close();
@@ -402,7 +423,17 @@ export class ChatGPTProvider extends BaseProvider {
         const parts = msg.content?.parts || [];
         const content = parts.filter((p: any) => typeof p === 'string').join('\n');
 
-        if (content) {
+        // Check if this message has audio or image content
+        const hasMediaContent = parts.some(
+          (p: any) =>
+            typeof p === 'object' &&
+            (p.content_type === 'audio_asset_pointer' ||
+              p.content_type === 'real_time_user_audio_video_asset_pointer' ||
+              p.content_type === 'image_asset_pointer')
+        );
+
+        // Include message if it has text content OR media content
+        if (content || hasMediaContent) {
           // Extract attachments from message metadata
           const attachments: any[] = [];
 
@@ -516,17 +547,30 @@ export class ChatGPTProvider extends BaseProvider {
                 }
               }
 
-              // Handle DALL-E images
-              if (part.content_type === 'image_asset_pointer') {
-                attachments.push({
-                  id: part.asset_pointer || `${node.id}-dalle-${attachments.length}`,
-                  type: 'image',
-                  url: part.metadata?.dalle?.prompt || '',
-                  metadata: {
-                    dallePrompt: part.metadata?.dalle?.prompt,
-                    dalleGenId: part.metadata?.dalle?.gen_id,
-                  },
-                });
+              // Handle image asset pointers (DALL-E, user uploads, etc.)
+              if (part.content_type === 'image_asset_pointer' && part.asset_pointer) {
+                const assetPointer = part.asset_pointer;
+                // Convert sediment:// or file-service:// to download URL
+                if (
+                  assetPointer.startsWith('sediment://') ||
+                  assetPointer.startsWith('file-service://')
+                ) {
+                  const fileId = assetPointer.replace(/^(sediment|file-service):\/\//, '');
+                  const downloadUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
+                  attachments.push({
+                    id: fileId,
+                    type: 'image',
+                    url: downloadUrl,
+                    mimeType: 'image/png', // Default, will be determined from actual file
+                    size: part.size_bytes,
+                    metadata: {
+                      width: part.width,
+                      height: part.height,
+                      dallePrompt: part.metadata?.dalle?.prompt,
+                      dalleGenId: part.metadata?.dalle?.gen_id,
+                    },
+                  });
+                }
               }
             }
           }

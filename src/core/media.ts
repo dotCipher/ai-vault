@@ -76,7 +76,8 @@ export class MediaManager {
   async downloadConversationMedia(
     conversation: Conversation,
     onProgress?: (current: number, total: number) => void,
-    cookies?: Record<string, string>
+    cookies?: Record<string, string>,
+    accessToken?: string
   ): Promise<MediaDownloadResult> {
     const result: MediaDownloadResult = {
       downloaded: 0,
@@ -159,7 +160,8 @@ export class MediaManager {
               conversation.provider,
               conversation.id,
               cookies,
-              true // Skip registry save - we'll batch save at the end
+              true, // Skip registry save - we'll batch save at the end
+              accessToken
             );
           }
 
@@ -302,7 +304,8 @@ export class MediaManager {
     provider: string,
     conversationId: string,
     cookies?: Record<string, string>,
-    skipRegistrySave = false
+    skipRegistrySave = false,
+    accessToken?: string
   ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
     // Download to temp location first to calculate hash
     // Use timestamp + random bytes to ensure uniqueness with concurrent downloads
@@ -312,7 +315,12 @@ export class MediaManager {
 
     try {
       // Download file
-      const { hash, size, mimeType } = await this.downloadToFile(url, tempPath, cookies);
+      const { hash, size, mimeType } = await this.downloadToFile(
+        url,
+        tempPath,
+        cookies,
+        accessToken
+      );
 
       // Check if we already have this file
       if (this.registry[hash]) {
@@ -397,7 +405,8 @@ export class MediaManager {
   private async downloadToFile(
     url: string,
     outputPath: string,
-    cookies?: Record<string, string>
+    cookies?: Record<string, string>,
+    accessToken?: string
   ): Promise<{ hash: string; size: number; mimeType: string }> {
     // Build Cookie header from cookies object
     const cookieHeader = cookies
@@ -412,6 +421,43 @@ export class MediaManager {
 
     if (cookieHeader) {
       headers['Cookie'] = cookieHeader;
+    }
+
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    // Special handling for ChatGPT media files - two-step download process
+    // Step 1: GET /backend-api/files/download/* returns JSON with download_url
+    // Step 2: GET download_url returns the actual file
+    // This applies to all media types: audio, images, documents, videos
+    if (url.includes('chatgpt.com/backend-api/files/download/')) {
+      try {
+        const metadataResponse = await this.getHttpClient().get(url, {
+          headers,
+          validateStatus: (status) => status < 500,
+        });
+
+        if (metadataResponse.status >= 400) {
+          throw new Error(`HTTP ${metadataResponse.status}: ${metadataResponse.statusText}`);
+        }
+
+        // Extract download_url from response
+        const downloadUrl = metadataResponse.data?.download_url;
+        if (!downloadUrl) {
+          throw new Error('No download_url in response from ChatGPT files API');
+        }
+
+        // Now download from the actual download_url
+        url = downloadUrl;
+      } catch (error: any) {
+        if (error.response) {
+          throw new Error(`HTTP ${error.response.status}: ${error.response.statusText} - ${url}`);
+        } else if (error.code) {
+          throw new Error(`${error.code}: ${error.message} - ${url}`);
+        }
+        throw error;
+      }
     }
 
     let response;
