@@ -1,3 +1,9 @@
+# [1.12.0](https://github.com/dotCipher/ai-vault/compare/v1.11.1...v1.12.0) (2025-11-01)
+
+### Features
+
+- add validation tooling and reliability improvements ([#11](https://github.com/dotCipher/ai-vault/issues/11)) ([1f0aff1](https://github.com/dotCipher/ai-vault/commit/1f0aff1ae8a50cb6347b1087e3aa19a8acf5db0c))
+
 ## [1.11.1](https://github.com/dotCipher/ai-vault/compare/v1.11.0...v1.11.1) (2025-11-01)
 
 ### Bug Fixes
