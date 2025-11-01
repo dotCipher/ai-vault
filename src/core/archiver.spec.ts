@@ -130,6 +130,7 @@ describe('Archiver', () => {
       succeed: vi.fn().mockReturnThis(),
       warn: vi.fn().mockReturnThis(),
       fail: vi.fn().mockReturnThis(),
+      stop: vi.fn().mockReturnThis(),
       text: '',
     };
     vi.mocked(ora).mockReturnValue(mockSpinner as any);

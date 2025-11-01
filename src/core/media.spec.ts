@@ -98,6 +98,8 @@ describe('MediaManager', () => {
   });
 
   describe('downloadConversationMedia', () => {
+    let mockAxiosInstance: any;
+
     beforeEach(() => {
       // Mock axios streaming download with EventEmitter
       const mockStream = {
@@ -113,13 +115,19 @@ describe('MediaManager', () => {
         pipe: vi.fn().mockReturnThis(),
       };
 
-      vi.mocked(axios.get).mockResolvedValue({
-        data: mockStream,
-        headers: { 'content-type': 'image/jpeg' },
-        status: 200,
-        statusText: 'OK',
-        config: {} as any,
-      } as any);
+      // Create mock axios instance with get method
+      mockAxiosInstance = {
+        get: vi.fn().mockResolvedValue({
+          data: mockStream,
+          headers: { 'content-type': 'image/jpeg' },
+          status: 200,
+          statusText: 'OK',
+          config: {} as any,
+        }),
+      };
+
+      // Mock axios.create to return our mock instance
+      vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
       // Mock createWriteStream
       const mockWriteStream = {
@@ -168,7 +176,7 @@ describe('MediaManager', () => {
     });
 
     it('should handle download errors gracefully', async () => {
-      vi.mocked(axios.get).mockRejectedValue(new Error('Network error'));
+      mockAxiosInstance.get.mockRejectedValue(new Error('Network error'));
 
       const conversation = createMockConversation();
       const result = await mediaManager.downloadConversationMedia(conversation);
@@ -194,7 +202,7 @@ describe('MediaManager', () => {
         ],
       });
 
-      vi.mocked(axios.get).mockRejectedValue(new Error('Failed'));
+      mockAxiosInstance.get.mockRejectedValue(new Error('Failed'));
 
       const result = await mediaManager.downloadConversationMedia(conversation);
 
@@ -204,6 +212,8 @@ describe('MediaManager', () => {
   });
 
   describe('downloadMedia', () => {
+    let mockAxiosInstance: any;
+
     beforeEach(() => {
       const mockStream = {
         on: vi.fn((event: string, handler: any) => {
@@ -218,10 +228,16 @@ describe('MediaManager', () => {
         pipe: vi.fn().mockReturnThis(),
       };
 
-      vi.mocked(axios.get).mockResolvedValue({
-        data: mockStream,
-        headers: { 'content-type': 'image/jpeg' },
-      } as any);
+      // Create mock axios instance with get method
+      mockAxiosInstance = {
+        get: vi.fn().mockResolvedValue({
+          data: mockStream,
+          headers: { 'content-type': 'image/jpeg' },
+        }),
+      };
+
+      // Mock axios.create to return our mock instance
+      vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
@@ -238,6 +254,9 @@ describe('MediaManager', () => {
     });
 
     it('should download new media file', async () => {
+      // Mock copyFile for file move operation
+      vi.mocked(fs.copyFile).mockResolvedValue(undefined);
+
       await mediaManager.init();
 
       const result = await mediaManager.downloadMedia(
@@ -249,7 +268,8 @@ describe('MediaManager', () => {
 
       expect(result.skipped).toBe(false);
       expect(result.hash).toBeTruthy();
-      expect(fs.rename).toHaveBeenCalled(); // Moved from temp to permanent
+      expect(fs.copyFile).toHaveBeenCalled(); // Moved from temp to permanent
+      expect(fs.unlink).toHaveBeenCalled(); // Cleaned up temp file
     });
 
     it.skip('should skip duplicate media and update references', async () => {
@@ -275,7 +295,7 @@ describe('MediaManager', () => {
 
     it('should clean up temp file on error', async () => {
       vi.mocked(existsSync).mockReturnValue(true); // Temp file exists
-      vi.mocked(axios.get).mockRejectedValue(new Error('Download failed'));
+      mockAxiosInstance.get.mockRejectedValue(new Error('Download failed'));
 
       await mediaManager.init();
 
@@ -412,7 +432,9 @@ describe('MediaManager', () => {
   });
 
   describe('file extension detection', () => {
-    it('should determine extension from MIME type', async () => {
+    let mockAxiosInstance: any;
+
+    beforeEach(() => {
       const mockStream = {
         on: vi.fn((event: string, handler: any) => {
           if (event === 'data') {
@@ -426,10 +448,16 @@ describe('MediaManager', () => {
         pipe: vi.fn().mockReturnThis(),
       };
 
-      vi.mocked(axios.get).mockResolvedValue({
-        data: mockStream,
-        headers: { 'content-type': 'image/png' },
-      } as any);
+      // Create mock axios instance with get method
+      mockAxiosInstance = {
+        get: vi.fn().mockResolvedValue({
+          data: mockStream,
+          headers: { 'content-type': 'image/png' },
+        }),
+      };
+
+      // Mock axios.create to return our mock instance
+      vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
@@ -443,7 +471,9 @@ describe('MediaManager', () => {
         }),
       };
       vi.mocked(createWriteStream).mockReturnValue(mockWriteStream as any);
+    });
 
+    it('should determine extension from MIME type', async () => {
       await mediaManager.init();
       const result = await mediaManager.downloadMedia(
         'https://example.com/image',
@@ -457,7 +487,9 @@ describe('MediaManager', () => {
   });
 
   describe('media type categorization', () => {
-    it('should categorize images correctly', async () => {
+    let mockAxiosInstance: any;
+
+    beforeEach(() => {
       const mockStream = {
         on: vi.fn((event: string, handler: any) => {
           if (event === 'data') {
@@ -471,10 +503,16 @@ describe('MediaManager', () => {
         pipe: vi.fn().mockReturnThis(),
       };
 
-      vi.mocked(axios.get).mockResolvedValue({
-        data: mockStream,
-        headers: { 'content-type': 'image/jpeg' },
-      } as any);
+      // Create mock axios instance with get method
+      mockAxiosInstance = {
+        get: vi.fn().mockResolvedValue({
+          data: mockStream,
+          headers: { 'content-type': 'image/jpeg' },
+        }),
+      };
+
+      // Mock axios.create to return our mock instance
+      vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
@@ -488,7 +526,9 @@ describe('MediaManager', () => {
         }),
       };
       vi.mocked(createWriteStream).mockReturnValue(mockWriteStream as any);
+    });
 
+    it('should categorize images correctly', async () => {
       await mediaManager.init();
       const result = await mediaManager.downloadMedia(
         'https://example.com/test.jpg',
