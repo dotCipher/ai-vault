@@ -242,7 +242,10 @@ describe('Storage', () => {
     });
 
     it('should return parsed index when file exists', async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
+      // Mock to return false for .gz files (no compression) and true for .json files
+      vi.mocked(existsSync).mockImplementation((path) => {
+        return !path.toString().endsWith('.gz');
+      });
       vi.mocked(fs.readFile).mockResolvedValue(
         JSON.stringify({
           'conv-123': {
@@ -268,7 +271,10 @@ describe('Storage', () => {
 
   describe('getStats', () => {
     it('should calculate statistics from index', async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
+      // Mock to return false for .gz files (no compression) and true for .json files
+      vi.mocked(existsSync).mockImplementation((path) => {
+        return !path.toString().endsWith('.gz');
+      });
       vi.mocked(fs.readFile).mockResolvedValue(
         JSON.stringify({
           'conv-1': {

@@ -40,21 +40,18 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ### Smart Features
 
-- **Native Import Support** - Import from official platform exports (Grok, ChatGPT, Claude)
-- **ZIP Import** - Import directly from ZIP files or unpacked directories
-- **Auto-Detection** - Automatically detects provider from export format
-- **Complete Media Preservation** - Imports images, DALL-E generations, audio, video, documents
-- **Assets Library Archiving** - Captures standalone assets (Grok images, docs, code files, etc.)
-- **Workspaces & Projects** - Archives Grok workspaces with projects, code files, and metadata
+- **Native Import Support** - Import from official platform exports (ZIP files or unpacked directories) with automatic provider detection
+- **Complete Media Preservation** - Downloads images, DALL-E generations, videos, and documents
+  - _Note: Audio from voice conversations is not available through most provider APIs (e.g., Grok, ChatGPT)_
+- **Hierarchical Organization** - Platform-agnostic workspace/project tracking with automatic disk reorganization when conversations move
 - **Smart Diff Archiving** - Automatically detects and re-archives updated conversations via timestamp comparison
 - **Incremental Backups** - Only fetch new/updated conversations, skip unchanged ones
-- **Status Checking** - Preview what's new or updated before archiving
-- **Media Deduplication** - Don't store the same image twice (SHA-256 based)
-- **Flexible Scheduling** - Daily, weekly, or custom cron expressions
-- **Rich Export Formats** - JSON + Markdown for maximum compatibility
-- **Hierarchical Organization** - Provider-agnostic folder structure preserves relationships
-- **Automatic Cookie Management** - Extract session cookies from your browser
-- **Filtering & Targeting** - Date ranges, conversation importance, custom queries
+- **Status Checking** - Preview what's new, updated, or moved before archiving
+- **Media Deduplication** - SHA-256 based deduplication prevents storing the same media twice
+- **Flexible Scheduling** - Daily, weekly, or custom cron expressions (native OS schedulers, no daemon required)
+- **Rich Export Formats** - JSON + Markdown for maximum compatibility and portability
+- **Filtering & Targeting** - Date ranges, search queries, conversation limits, specific conversation IDs
+- **Provider-Specific Features** - Assets library archiving (Grok), workspace/project metadata (Grok, ChatGPT)
 
 ## 📦 Installation
 
@@ -204,14 +201,16 @@ ai-vault setup --cookies-file ~/Downloads/cookies.json
 
 **For cookie-based authentication:**
 
-1. Install [Cookie-Editor](https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) extension
-2. Go to the provider's website and log in:
+1. Go to the provider's website and log in:
    - **grok-web**: grok.com
    - **grok-x**: x.com/grok
-   - Other providers as applicable
-3. Click Cookie-Editor → Export → JSON
-4. Save to a file
-5. Run `ai-vault setup --cookies-file <path>`
+   - **chatgpt**: chatgpt.com
+2. Open Chrome DevTools (F12 or Cmd+Option+I)
+3. Go to Application tab → Cookies → Select the site
+4. Copy the cookie values you need (varies by provider)
+5. Run `ai-vault setup` and enter cookies when prompted
+
+Alternatively, you can export cookies to a JSON file and use `ai-vault setup --cookies-file <path>`
 
 The interactive wizard will:
 
@@ -267,6 +266,7 @@ The status command shows:
 
 - **New conversations** not yet archived (marked with +)
 - **Updated conversations** that changed remotely since last archive (marked with ○)
+- **Hierarchy changes** conversations moved between workspaces/projects (marked with →)
 - **Already archived** conversations that are up-to-date (marked with ✓)
 
 This helps you preview what will be downloaded before running `ai-vault archive`.
@@ -304,14 +304,6 @@ ai-vault import --file ~/Downloads/export.zip --yes
 - **Grok on X**: Export from x.com/grok (if available)
   - Use `--provider grok-x` for X-integrated Grok conversations
 - **Claude**: _(coming soon)_ Export from settings
-
-**Why import vs scraping?**
-
-- ✅ Faster - no web automation needed
-- ✅ More reliable - uses official export format
-- ✅ Complete data - includes all metadata and media files
-- ✅ Works with ZIP files or unpacked directories
-- ✅ Works alongside automated scraping for incremental updates
 
 ### Schedule Automated Backups
 
@@ -399,10 +391,26 @@ ai-vault list --search "machine learning"
 ```
 ~/ai-vault-data/
 ├── grok-web/          # Standalone grok.com conversations
-│   ├── conversations/
+│   ├── conversations/ # Unorganized conversations (fallback)
 │   │   └── conv-123/
 │   │       ├── conversation.json
 │   │       └── conversation.md
+│   ├── workspaces/    # Hierarchically organized conversations
+│   │   └── workspace-abc/
+│   │       ├── conversations/
+│   │       │   └── conv-456/    # Workspace-level conversation
+│   │       │       ├── conversation.json
+│   │       │       └── conversation.md
+│   │       └── projects/
+│   │           └── project-xyz/
+│   │               ├── conversations/
+│   │               │   └── conv-789/   # Project-level conversation
+│   │               │       ├── conversation.json
+│   │               │       └── conversation.md
+│   │               ├── project.json
+│   │               ├── project.md
+│   │               └── files/
+│   │                   └── code-file.py
 │   ├── assets/        # Assets library (images, docs, code, etc.)
 │   │   ├── assets-index.json
 │   │   └── by-type/
@@ -412,37 +420,45 @@ ai-vault list --search "machine learning"
 │   │       ├── document/
 │   │       ├── code/
 │   │       └── data/
-│   ├── workspaces/    # Workspaces and projects
-│   │   ├── workspaces-index.json
-│   │   └── workspace-123/
-│   │       ├── workspace.json
-│   │       ├── workspace.md
-│   │       └── projects/
-│   │           └── project-456/
-│   │               ├── project.json
-│   │               ├── project.md
-│   │               └── files/
-│   │                   └── code-file.py
 │   ├── media/
 │   │   ├── images/
 │   │   ├── videos/
 │   │   └── documents/
-│   ├── index.json
+│   ├── index.json           # Includes hierarchy metadata
+│   ├── hierarchy-index.json # Fast hierarchy lookups
 │   └── media-registry.json
+├── chatgpt/           # ChatGPT conversations
+│   ├── conversations/ # Unorganized conversations
+│   ├── workspaces/    # Project-organized conversations
+│   │   └── project-name/
+│   │       └── conversations/
+│   └── ...
 ├── grok-x/            # X-integrated Grok conversations
-│   └── ... (same structure)
-├── chatgpt/
+│   └── ... (same structure as grok-web)
 └── claude/
 ```
 
 **Structure Explanation:**
 
-- **conversations/**: Chat conversations with full message history
+- **conversations/**: Flat storage for conversations without workspace/project organization
+- **workspaces/**: Hierarchical organization matching platform structure (Grok workspaces, ChatGPT projects)
+  - Conversations are automatically organized by their workspace/project membership
+  - Supports nested projects within workspaces
+  - Files are automatically reorganized when conversations move between workspaces/projects
 - **assets/**: Standalone assets library organized by type (images, documents, code, etc.)
-- **workspaces/**: Grok workspaces containing projects with code, files, and metadata
-- **media/**: Downloaded media files (images, videos, documents) with deduplication
-- **index.json**: Quick lookup index for conversations
+- **media/**: Downloaded media files (images, videos, documents) with SHA-256 deduplication
+- **index.json**: Quick lookup index for conversations with hierarchy metadata
+- **hierarchy-index.json**: Fast workspace/project hierarchy lookups
 - **media-registry.json**: Tracks media files and prevents duplicates
+
+**Hierarchy Support by Provider:**
+
+- **Grok (grok-web)**: ✅ Full workspace and project tracking
+- **ChatGPT**: ✅ Project tracking
+- **Grok on X (grok-x)**: ❌ No hierarchy (flat structure)
+- **Claude**: 📋 Planned
+- **Gemini**: 📋 Planned
+- **Perplexity**: 📋 Planned
 
 ### Customizing Archive Directory
 
@@ -574,6 +590,12 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
   - [x] Full CRUD operations (add, list, remove, enable, disable)
   - [x] Per-provider schedule configuration
   - [x] Logging infrastructure
+- [x] Hierarchy tracking:
+  - [x] Platform-agnostic workspace/project tracking
+  - [x] Automatic disk reorganization when conversations move
+  - [x] Hierarchy change detection in status command
+  - [x] Grok workspace and project support
+  - [x] ChatGPT project support
 
 ### In Progress 🚧
 

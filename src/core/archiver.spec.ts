@@ -80,6 +80,7 @@ describe('Archiver', () => {
 
     // Mock MediaManager
     mockMediaManager = {
+      init: vi.fn().mockResolvedValue(undefined),
       downloadConversationMedia: vi.fn().mockResolvedValue({
         downloaded: 0,
         skipped: 0,
@@ -129,6 +130,7 @@ describe('Archiver', () => {
       succeed: vi.fn().mockReturnThis(),
       warn: vi.fn().mockReturnThis(),
       fail: vi.fn().mockReturnThis(),
+      stop: vi.fn().mockReturnThis(),
       text: '',
     };
     vi.mocked(ora).mockReturnValue(mockSpinner as any);

@@ -37,6 +37,23 @@ interface DiffResult {
     localUpdatedAt: Date;
     messageCount: number;
   }>;
+  hierarchyChangedConversations: Array<{
+    id: string;
+    title: string;
+    change: string;
+    from: {
+      workspaceId?: string;
+      workspaceName?: string;
+      projectId?: string;
+      projectName?: string;
+    };
+    to: {
+      workspaceId?: string;
+      workspaceName?: string;
+      projectId?: string;
+      projectName?: string;
+    };
+  }>;
 }
 
 export async function statusCommand(options: StatusOptions): Promise<void> {
@@ -155,9 +172,84 @@ async function checkProviderStatus(
       newConversations: [],
       archivedConversations: [],
       updatedConversations: [],
+      hierarchyChangedConversations: [],
     };
 
     const localConversationIds = new Set(Object.keys(localIndex));
+
+    // Check for hierarchy changes by sampling a few conversations
+    const hierarchyCheckSpinner = ora('Checking for hierarchy changes...').start();
+    const conversationsToCheck = remoteConversations
+      .filter((remote) => localConversationIds.has(remote.id))
+      .slice(0, Math.min(20, remoteConversations.length)); // Sample first 20 for performance
+
+    for (const remoteSummary of conversationsToCheck) {
+      try {
+        const remoteConversation = await provider.fetchConversation(remoteSummary.id);
+        const local = localIndex[remoteSummary.id];
+
+        // Check for hierarchy changes
+        const localHierarchy = local.workspaceId || local.projectId || local.folder;
+        const remoteHierarchy =
+          remoteConversation.hierarchy?.workspaceId ||
+          remoteConversation.hierarchy?.projectId ||
+          remoteConversation.hierarchy?.folder;
+
+        const hasHierarchyChanged =
+          localHierarchy !== remoteHierarchy ||
+          local.workspaceId !== remoteConversation.hierarchy?.workspaceId ||
+          local.projectId !== remoteConversation.hierarchy?.projectId ||
+          local.workspaceName !== remoteConversation.hierarchy?.workspaceName ||
+          local.projectName !== remoteConversation.hierarchy?.projectName;
+
+        if (hasHierarchyChanged) {
+          let change = 'Organizational structure changed';
+
+          if (!localHierarchy && remoteHierarchy) {
+            change = 'Added to workspace/project';
+          } else if (localHierarchy && !remoteHierarchy) {
+            change = 'Removed from workspace/project';
+          } else if (local.workspaceId !== remoteConversation.hierarchy?.workspaceId) {
+            change = 'Moved to different workspace';
+          } else if (local.projectId !== remoteConversation.hierarchy?.projectId) {
+            if (!local.projectId && remoteConversation.hierarchy?.projectId) {
+              change = 'Added to project';
+            } else if (local.projectId && !remoteConversation.hierarchy?.projectId) {
+              change = 'Removed from project';
+            } else {
+              change = 'Moved to different project';
+            }
+          } else if (
+            local.workspaceName !== remoteConversation.hierarchy?.workspaceName ||
+            local.projectName !== remoteConversation.hierarchy?.projectName
+          ) {
+            change = 'Workspace/project renamed';
+          }
+
+          diff.hierarchyChangedConversations.push({
+            id: remoteSummary.id,
+            title: remoteSummary.title,
+            change,
+            from: {
+              workspaceId: local.workspaceId,
+              workspaceName: local.workspaceName,
+              projectId: local.projectId,
+              projectName: local.projectName,
+            },
+            to: {
+              workspaceId: remoteConversation.hierarchy?.workspaceId,
+              workspaceName: remoteConversation.hierarchy?.workspaceName,
+              projectId: remoteConversation.hierarchy?.projectId,
+              projectName: remoteConversation.hierarchy?.projectName,
+            },
+          });
+        }
+      } catch {
+        // Skip this conversation if fetch fails
+        continue;
+      }
+    }
+    hierarchyCheckSpinner.succeed(`Checked ${conversationsToCheck.length} conversations`);
 
     for (const remote of remoteConversations) {
       if (!localConversationIds.has(remote.id)) {
@@ -207,6 +299,9 @@ async function checkProviderStatus(
     console.log(`  ${chalk.green('✓')} Already archived: ${diff.archivedConversations.length}`);
     console.log(`  ${chalk.yellow('○')} Updated on remote: ${diff.updatedConversations.length}`);
     console.log(`  ${chalk.blue('+')} New (not archived): ${diff.newConversations.length}`);
+    console.log(
+      `  ${chalk.magenta('↔')} Hierarchy changed: ${diff.hierarchyChangedConversations.length}`
+    );
     console.log(`  ${chalk.gray('=')} Total remote: ${remoteConversations.length}`);
     console.log();
 
@@ -245,10 +340,50 @@ async function checkProviderStatus(
       console.log();
     }
 
-    // Show hint for archiving
-    if (diff.newConversations.length > 0 || diff.updatedConversations.length > 0) {
+    // Show hierarchy changed conversations
+    if (diff.hierarchyChangedConversations.length > 0) {
       console.log(
-        chalk.cyan('\n💡 Tip: Run `ai-vault archive` to download new and updated conversations')
+        chalk.bold.magenta(`\n↔ Hierarchy Changed (${diff.hierarchyChangedConversations.length}):`)
+      );
+      console.log(chalk.gray('─'.repeat(80)));
+      diff.hierarchyChangedConversations.slice(0, 10).forEach((conv) => {
+        console.log(`  ${chalk.magenta('↔')} ${conv.title}`);
+        console.log(`     ${chalk.gray(conv.change)}`);
+
+        // Display from → to
+        const fromText =
+          conv.from.workspaceName || conv.from.projectName
+            ? `${conv.from.workspaceName || 'Unorganized'}${conv.from.projectName ? ` / ${conv.from.projectName}` : ''}`
+            : 'Unorganized';
+        const toText =
+          conv.to.workspaceName || conv.to.projectName
+            ? `${conv.to.workspaceName || 'Unorganized'}${conv.to.projectName ? ` / ${conv.to.projectName}` : ''}`
+            : 'Unorganized';
+
+        console.log(`     ${chalk.gray(fromText)} ${chalk.magenta('→')} ${chalk.magenta(toText)}`);
+      });
+      if (diff.hierarchyChangedConversations.length > 10) {
+        console.log(
+          chalk.gray(`     ... and ${diff.hierarchyChangedConversations.length - 10} more`)
+        );
+      }
+      console.log();
+    }
+
+    // Show hint for archiving
+    if (
+      diff.newConversations.length > 0 ||
+      diff.updatedConversations.length > 0 ||
+      diff.hierarchyChangedConversations.length > 0
+    ) {
+      const actions: string[] = [];
+      if (diff.newConversations.length > 0) actions.push('new');
+      if (diff.updatedConversations.length > 0) actions.push('updated');
+      if (diff.hierarchyChangedConversations.length > 0) actions.push('reorganized');
+      console.log(
+        chalk.cyan(
+          `\n💡 Tip: Run \`ai-vault archive\` to download ${actions.join(', ')} conversations`
+        )
       );
     }
 
