@@ -10,8 +10,8 @@
 class AiVault < Formula
   desc "Own your data. Comprehensive archival of AI interactions across multiple platforms"
   homepage "https://github.com/dotCipher/ai-vault"
-  url "https://github.com/dotCipher/ai-vault/archive/refs/tags/v1.13.0.tar.gz"
-  sha256 "47baf85f17e6b71f3c03f1bcedd44a19440ce3b8db3667e3db59fb412e1aab0d"
+  url "https://github.com/dotCipher/ai-vault/archive/refs/tags/v1.14.0.tar.gz"
+  sha256 "bf89ad385a8ff4d797385e11f4975c03103ce3fc4f6e98b7802626345867700f"
   license "MIT"
 
   depends_on "node@22"
