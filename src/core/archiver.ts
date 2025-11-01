@@ -268,15 +268,17 @@ export class Archiver {
                 `${progress} Downloading ${conversation.metadata.mediaCount} media files...`
               ).start();
 
-              // Get cookies from provider if available (needed for authenticated media downloads)
+              // Get authentication from provider if available (needed for authenticated media downloads)
               const providerCookies = (provider as any).config?.cookies;
+              const providerAccessToken = (provider as any).config?.accessToken;
 
               mediaResult = await this.mediaManager.downloadConversationMedia(
                 conversation,
                 (current, mediaTotal) => {
                   mediaSpinner.text = `${progress} Downloading media: ${current}/${mediaTotal}`;
                 },
-                providerCookies
+                providerCookies,
+                providerAccessToken
               );
 
               if (mediaResult.failed > 0) {
