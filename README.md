@@ -591,6 +591,7 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
   - [x] **Web scraping**: Cookie-based authentication via backend API
   - [x] **Media support**: Images (uploaded & DALL-E), videos, documents
   - [x] **Backend API integration**: Reliable conversation fetching with full attachment metadata
+  - [x] **Automatic unarchiving**: Automatically unarchives archived conversations during archiving to ensure complete backup coverage
 - [x] Smart filtering system:
   - [x] Date range filtering (since/until)
   - [x] Search query filtering (title/preview)

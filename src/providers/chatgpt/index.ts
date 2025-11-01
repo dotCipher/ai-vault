@@ -165,10 +165,11 @@ export class ChatGPTProvider extends BaseProvider {
       // Use backend API to fetch both conversations and projects
       const limit = options.limit || 100;
       const conversationsUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=false&is_starred=false`;
+      const archivedConversationsUrl = `https://chatgpt.com/backend-api/conversations?offset=0&limit=${limit}&order=updated&is_archived=true&is_starred=false`;
       const projectsUrl = `https://chatgpt.com/backend-api/gizmos/snorlax/sidebar?conversations_per_gizmo=20&owned_only=true`;
 
       const response = await page.evaluate(
-        async ({ conversationsUrl, projectsUrl, token }) => {
+        async ({ conversationsUrl, archivedConversationsUrl, projectsUrl, token }) => {
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
@@ -189,6 +190,33 @@ export class ChatGPTProvider extends BaseProvider {
 
           const conversationsData = await conversationsRes.json();
 
+          // Fetch archived conversations
+          const archivedConversationsRes = await fetch(archivedConversationsUrl, {
+            method: 'GET',
+            credentials: 'include',
+            headers,
+          });
+
+          let archivedConversationsData = null;
+          if (archivedConversationsRes.ok) {
+            archivedConversationsData = await archivedConversationsRes.json();
+
+            // Unarchive all archived conversations
+            const archivedItems = archivedConversationsData?.items || [];
+            for (const conv of archivedItems) {
+              try {
+                await fetch(`https://chatgpt.com/backend-api/conversation/${conv.id}`, {
+                  method: 'PATCH',
+                  credentials: 'include',
+                  headers,
+                  body: JSON.stringify({ is_archived: false }),
+                });
+              } catch (err) {
+                console.error(`Failed to unarchive conversation ${conv.id}:`, err);
+              }
+            }
+          }
+
           // Fetch projects
           let projectsData = null;
           try {
@@ -207,23 +235,30 @@ export class ChatGPTProvider extends BaseProvider {
 
           return {
             conversations: conversationsData,
+            archivedConversations: archivedConversationsData,
             projects: projectsData,
           };
         },
-        { conversationsUrl, projectsUrl, token: accessToken }
+        { conversationsUrl, archivedConversationsUrl, projectsUrl, token: accessToken }
       );
 
       await page.close();
 
-      // Parse API response
+      // Parse API response - combine regular and archived conversations
       const conversations = response.conversations?.items || [];
+      const archivedConversations = response.archivedConversations?.items || [];
+      const allConversations = [...conversations, ...archivedConversations];
 
-      if (!Array.isArray(conversations)) {
+      if (!Array.isArray(allConversations)) {
         throw new Error('Unexpected API response format');
       }
 
+      if (archivedConversations.length > 0) {
+        console.log(`[ChatGPT] Unarchived ${archivedConversations.length} archived conversations`);
+      }
+
       // Transform to ConversationSummary format
-      let summaries: ConversationSummary[] = conversations.map((conv: any) => ({
+      let summaries: ConversationSummary[] = allConversations.map((conv: any) => ({
         id: conv.id,
         title: conv.title || 'Untitled',
         messageCount: 0, // Not provided in list API
@@ -374,22 +409,23 @@ export class ChatGPTProvider extends BaseProvider {
           // Check for image/video/document attachments
           if (msg.metadata?.attachments) {
             for (const att of msg.metadata.attachments) {
-              // Try multiple URL fields and skip internal protocol URLs
-              const possibleUrl =
+              // Try multiple URL fields
+              let possibleUrl =
                 att.download_url || // Prefer download_url
                 att.url || // Then url
                 att.download_link || // Alternative field
                 att.fileDownloadUrl || // Alternative field
                 '';
 
-              // Skip internal protocol URLs - these aren't downloadable
+              // Convert internal protocol URLs to backend-api download URLs
               // file-service:// - internal file references
               // sediment:// - internal content storage
               if (
                 possibleUrl.startsWith('file-service://') ||
                 possibleUrl.startsWith('sediment://')
               ) {
-                continue;
+                const fileId = possibleUrl.replace(/^(sediment|file-service):\/\//, '');
+                possibleUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
               }
 
               // Only add attachments with valid download URLs
@@ -426,18 +462,72 @@ export class ChatGPTProvider extends BaseProvider {
             }
           }
 
-          // Check for DALL-E images in content parts
+          // Check for audio files in content parts (voice conversations)
           for (const part of parts) {
-            if (typeof part === 'object' && part.content_type === 'image_asset_pointer') {
-              attachments.push({
-                id: part.asset_pointer || `${node.id}-dalle-${attachments.length}`,
-                type: 'image',
-                url: part.metadata?.dalle?.prompt || '',
-                metadata: {
-                  dallePrompt: part.metadata?.dalle?.prompt,
-                  dalleGenId: part.metadata?.dalle?.gen_id,
-                },
-              });
+            if (typeof part === 'object') {
+              // Handle audio asset pointers (assistant messages)
+              if (part.content_type === 'audio_asset_pointer' && part.asset_pointer) {
+                const assetPointer = part.asset_pointer;
+                // Convert sediment:// or file-service:// to download URL
+                if (
+                  assetPointer.startsWith('sediment://') ||
+                  assetPointer.startsWith('file-service://')
+                ) {
+                  const fileId = assetPointer.replace(/^(sediment|file-service):\/\//, '');
+                  const downloadUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
+                  attachments.push({
+                    id: fileId,
+                    type: 'audio',
+                    url: downloadUrl,
+                    mimeType: part.format === 'wav' ? 'audio/wav' : 'audio/mpeg',
+                    size: part.size_bytes,
+                    metadata: {
+                      format: part.format,
+                      duration: part.metadata?.end || 0,
+                    },
+                  });
+                }
+              }
+
+              // Handle real-time user audio/video (user messages)
+              if (
+                part.content_type === 'real_time_user_audio_video_asset_pointer' &&
+                part.audio_asset_pointer?.asset_pointer
+              ) {
+                const assetPointer = part.audio_asset_pointer.asset_pointer;
+                if (
+                  assetPointer.startsWith('sediment://') ||
+                  assetPointer.startsWith('file-service://')
+                ) {
+                  const fileId = assetPointer.replace(/^(sediment|file-service):\/\//, '');
+                  const downloadUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
+                  attachments.push({
+                    id: fileId,
+                    type: 'audio',
+                    url: downloadUrl,
+                    mimeType:
+                      part.audio_asset_pointer.format === 'wav' ? 'audio/wav' : 'audio/mpeg',
+                    size: part.audio_asset_pointer.size_bytes,
+                    metadata: {
+                      format: part.audio_asset_pointer.format,
+                      duration: part.audio_asset_pointer.metadata?.end || 0,
+                    },
+                  });
+                }
+              }
+
+              // Handle DALL-E images
+              if (part.content_type === 'image_asset_pointer') {
+                attachments.push({
+                  id: part.asset_pointer || `${node.id}-dalle-${attachments.length}`,
+                  type: 'image',
+                  url: part.metadata?.dalle?.prompt || '',
+                  metadata: {
+                    dallePrompt: part.metadata?.dalle?.prompt,
+                    dalleGenId: part.metadata?.dalle?.gen_id,
+                  },
+                });
+              }
             }
           }
 
