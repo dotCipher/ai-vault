@@ -40,21 +40,18 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ### Smart Features
 
-- **Native Import Support** - Import from official platform exports (Grok, ChatGPT, Claude)
-- **ZIP Import** - Import directly from ZIP files or unpacked directories
-- **Auto-Detection** - Automatically detects provider from export format
-- **Complete Media Preservation** - Imports images, DALL-E generations, audio, video, documents
-- **Assets Library Archiving** - Captures standalone assets (Grok images, docs, code files, etc.)
-- **Workspaces & Projects** - Archives Grok workspaces with projects, code files, and metadata
+- **Native Import Support** - Import from official platform exports (ZIP files or unpacked directories) with automatic provider detection
+- **Complete Media Preservation** - Downloads images, DALL-E generations, videos, and documents
+  - _Note: Audio from voice conversations is not available through most provider APIs (e.g., Grok, ChatGPT)_
+- **Hierarchical Organization** - Platform-agnostic workspace/project tracking with automatic disk reorganization when conversations move
 - **Smart Diff Archiving** - Automatically detects and re-archives updated conversations via timestamp comparison
 - **Incremental Backups** - Only fetch new/updated conversations, skip unchanged ones
-- **Status Checking** - Preview what's new or updated before archiving
-- **Media Deduplication** - Don't store the same image twice (SHA-256 based)
-- **Flexible Scheduling** - Daily, weekly, or custom cron expressions
-- **Rich Export Formats** - JSON + Markdown for maximum compatibility
-- **Hierarchical Organization** - Platform-agnostic workspace/project tracking with automatic disk reorganization
-- **Automatic Cookie Management** - Extract session cookies from your browser
-- **Filtering & Targeting** - Date ranges, conversation importance, custom queries
+- **Status Checking** - Preview what's new, updated, or moved before archiving
+- **Media Deduplication** - SHA-256 based deduplication prevents storing the same media twice
+- **Flexible Scheduling** - Daily, weekly, or custom cron expressions (native OS schedulers, no daemon required)
+- **Rich Export Formats** - JSON + Markdown for maximum compatibility and portability
+- **Filtering & Targeting** - Date ranges, search queries, conversation limits, specific conversation IDs
+- **Provider-Specific Features** - Assets library archiving (Grok), workspace/project metadata (Grok, ChatGPT)
 
 ## 📦 Installation
 
