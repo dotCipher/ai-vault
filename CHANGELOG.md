@@ -1,3 +1,9 @@
+## [1.11.1](https://github.com/dotCipher/ai-vault/compare/v1.11.0...v1.11.1) (2025-11-01)
+
+### Bug Fixes
+
+- resolve ENOENT race condition in concurrent media downloads ([3933c58](https://github.com/dotCipher/ai-vault/commit/3933c585ec4fe1be9f36290fdeef3bede6849c5e))
+
 # [1.11.0](https://github.com/dotCipher/ai-vault/compare/v1.10.5...v1.11.0) (2025-11-01)
 
 ### Features
