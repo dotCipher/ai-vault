@@ -305,14 +305,6 @@ ai-vault import --file ~/Downloads/export.zip --yes
   - Use `--provider grok-x` for X-integrated Grok conversations
 - **Claude**: _(coming soon)_ Export from settings
 
-**Why import vs scraping?**
-
-- ✅ Faster - no web automation needed
-- ✅ More reliable - uses official export format
-- ✅ Complete data - includes all metadata and media files
-- ✅ Works with ZIP files or unpacked directories
-- ✅ Works alongside automated scraping for incremental updates
-
 ### Schedule Automated Backups
 
 AI Vault uses native OS schedulers (cron on Unix, Task Scheduler on Windows) for automated backups. No long-running daemon required!
