@@ -52,7 +52,7 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 - **Media Deduplication** - Don't store the same image twice (SHA-256 based)
 - **Flexible Scheduling** - Daily, weekly, or custom cron expressions
 - **Rich Export Formats** - JSON + Markdown for maximum compatibility
-- **Hierarchical Organization** - Provider-agnostic folder structure preserves relationships
+- **Hierarchical Organization** - Platform-agnostic workspace/project tracking with automatic disk reorganization
 - **Automatic Cookie Management** - Extract session cookies from your browser
 - **Filtering & Targeting** - Date ranges, conversation importance, custom queries
 
@@ -267,6 +267,7 @@ The status command shows:
 
 - **New conversations** not yet archived (marked with +)
 - **Updated conversations** that changed remotely since last archive (marked with ○)
+- **Hierarchy changes** conversations moved between workspaces/projects (marked with →)
 - **Already archived** conversations that are up-to-date (marked with ✓)
 
 This helps you preview what will be downloaded before running `ai-vault archive`.
@@ -399,10 +400,26 @@ ai-vault list --search "machine learning"
 ```
 ~/ai-vault-data/
 ├── grok-web/          # Standalone grok.com conversations
-│   ├── conversations/
+│   ├── conversations/ # Unorganized conversations (fallback)
 │   │   └── conv-123/
 │   │       ├── conversation.json
 │   │       └── conversation.md
+│   ├── workspaces/    # Hierarchically organized conversations
+│   │   └── workspace-abc/
+│   │       ├── conversations/
+│   │       │   └── conv-456/    # Workspace-level conversation
+│   │       │       ├── conversation.json
+│   │       │       └── conversation.md
+│   │       └── projects/
+│   │           └── project-xyz/
+│   │               ├── conversations/
+│   │               │   └── conv-789/   # Project-level conversation
+│   │               │       ├── conversation.json
+│   │               │       └── conversation.md
+│   │               ├── project.json
+│   │               ├── project.md
+│   │               └── files/
+│   │                   └── code-file.py
 │   ├── assets/        # Assets library (images, docs, code, etc.)
 │   │   ├── assets-index.json
 │   │   └── by-type/
@@ -412,37 +429,45 @@ ai-vault list --search "machine learning"
 │   │       ├── document/
 │   │       ├── code/
 │   │       └── data/
-│   ├── workspaces/    # Workspaces and projects
-│   │   ├── workspaces-index.json
-│   │   └── workspace-123/
-│   │       ├── workspace.json
-│   │       ├── workspace.md
-│   │       └── projects/
-│   │           └── project-456/
-│   │               ├── project.json
-│   │               ├── project.md
-│   │               └── files/
-│   │                   └── code-file.py
 │   ├── media/
 │   │   ├── images/
 │   │   ├── videos/
 │   │   └── documents/
-│   ├── index.json
+│   ├── index.json           # Includes hierarchy metadata
+│   ├── hierarchy-index.json # Fast hierarchy lookups
 │   └── media-registry.json
+├── chatgpt/           # ChatGPT conversations
+│   ├── conversations/ # Unorganized conversations
+│   ├── workspaces/    # Project-organized conversations
+│   │   └── project-name/
+│   │       └── conversations/
+│   └── ...
 ├── grok-x/            # X-integrated Grok conversations
-│   └── ... (same structure)
-├── chatgpt/
+│   └── ... (same structure as grok-web)
 └── claude/
 ```
 
 **Structure Explanation:**
 
-- **conversations/**: Chat conversations with full message history
+- **conversations/**: Flat storage for conversations without workspace/project organization
+- **workspaces/**: Hierarchical organization matching platform structure (Grok workspaces, ChatGPT projects)
+  - Conversations are automatically organized by their workspace/project membership
+  - Supports nested projects within workspaces
+  - Files are automatically reorganized when conversations move between workspaces/projects
 - **assets/**: Standalone assets library organized by type (images, documents, code, etc.)
-- **workspaces/**: Grok workspaces containing projects with code, files, and metadata
-- **media/**: Downloaded media files (images, videos, documents) with deduplication
-- **index.json**: Quick lookup index for conversations
+- **media/**: Downloaded media files (images, videos, documents) with SHA-256 deduplication
+- **index.json**: Quick lookup index for conversations with hierarchy metadata
+- **hierarchy-index.json**: Fast workspace/project hierarchy lookups
 - **media-registry.json**: Tracks media files and prevents duplicates
+
+**Hierarchy Support by Provider:**
+
+- **Grok (grok-web)**: ✅ Full workspace and project tracking
+- **ChatGPT**: ✅ Project tracking
+- **Grok on X (grok-x)**: ❌ No hierarchy (flat structure)
+- **Claude**: 📋 Planned
+- **Gemini**: 📋 Planned
+- **Perplexity**: 📋 Planned
 
 ### Customizing Archive Directory
 
@@ -574,6 +599,12 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
   - [x] Full CRUD operations (add, list, remove, enable, disable)
   - [x] Per-provider schedule configuration
   - [x] Logging infrastructure
+- [x] Hierarchy tracking:
+  - [x] Platform-agnostic workspace/project tracking
+  - [x] Automatic disk reorganization when conversations move
+  - [x] Hierarchy change detection in status command
+  - [x] Grok workspace and project support
+  - [x] ChatGPT project support
 
 ### In Progress 🚧
 
