@@ -1,3 +1,9 @@
+# [1.14.0](https://github.com/dotCipher/ai-vault/compare/v1.13.0...v1.14.0) (2025-11-01)
+
+### Features
+
+- **chatgpt:** massive media coverage improvements (61% → 96%) ([#12](https://github.com/dotCipher/ai-vault/issues/12)) ([090e782](https://github.com/dotCipher/ai-vault/commit/090e782b9455caca5176670f627762657069ed8a))
+
 # [1.13.0](https://github.com/dotCipher/ai-vault/compare/v1.12.2...v1.13.0) (2025-11-01)
 
 ### Features
