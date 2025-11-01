@@ -201,14 +201,16 @@ ai-vault setup --cookies-file ~/Downloads/cookies.json
 
 **For cookie-based authentication:**
 
-1. Install [Cookie-Editor](https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) extension
-2. Go to the provider's website and log in:
+1. Go to the provider's website and log in:
    - **grok-web**: grok.com
    - **grok-x**: x.com/grok
-   - Other providers as applicable
-3. Click Cookie-Editor → Export → JSON
-4. Save to a file
-5. Run `ai-vault setup --cookies-file <path>`
+   - **chatgpt**: chatgpt.com
+2. Open Chrome DevTools (F12 or Cmd+Option+I)
+3. Go to Application tab → Cookies → Select the site
+4. Copy the cookie values you need (varies by provider)
+5. Run `ai-vault setup` and enter cookies when prompted
+
+Alternatively, you can export cookies to a JSON file and use `ai-vault setup --cookies-file <path>`
 
 The interactive wizard will:
 
