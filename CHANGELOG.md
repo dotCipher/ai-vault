@@ -1,3 +1,9 @@
+# [1.15.0](https://github.com/dotCipher/ai-vault/compare/v1.14.0...v1.15.0) (2025-11-03)
+
+### Features
+
+- **grok:** add pagination, rate limiting, and improved error handling ([#13](https://github.com/dotCipher/ai-vault/issues/13)) ([2c64de0](https://github.com/dotCipher/ai-vault/commit/2c64de0aed5a9440d545cc4fab11db2f8931b585))
+
 # [1.14.0](https://github.com/dotCipher/ai-vault/compare/v1.13.0...v1.14.0) (2025-11-01)
 
 ### Features
