@@ -1,3 +1,9 @@
+# [1.16.0](https://github.com/dotCipher/ai-vault/compare/v1.15.0...v1.16.0) (2025-11-03)
+
+### Features
+
+- **claude:** add Claude provider with import and archiving support ([#14](https://github.com/dotCipher/ai-vault/issues/14)) ([2b55aae](https://github.com/dotCipher/ai-vault/commit/2b55aae36007cdf113e7919643a3a20e319be6f9))
+
 # [1.15.0](https://github.com/dotCipher/ai-vault/compare/v1.14.0...v1.15.0) (2025-11-03)
 
 ### Features
