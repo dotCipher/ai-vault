@@ -185,26 +185,85 @@ export class GrokWebProvider extends BaseProvider {
               const responseIds = responseNodes.map((node: any) => node.responseId).filter(Boolean);
 
               if (responseIds.length > 0) {
-                // Step 2: Fetch actual message content using load-responses with responseIds
+                // Step 2: Paginate through load-responses to fetch ALL messages
                 const loadResponsesUrl = `https://grok.com/rest/app-chat/conversations/${conversationId}/load-responses`;
 
-                const messagesResponse = await fetch(loadResponsesUrl, {
-                  method: 'POST',
-                  credentials: 'include',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ responseIds }),
-                });
+                let allResponses: any[] = [];
+                let cursor: string | null = null;
+                let pageCount = 0;
+                const maxPages = 100; // Safety limit to prevent infinite loops
 
-                if (messagesResponse.ok) {
+                // Keep fetching until no more pages
+                while (pageCount < maxPages) {
+                  pageCount++;
+
+                  // Build request body with responseIds and optional cursor for pagination
+                  const requestBody: any = { responseIds };
+                  if (cursor) {
+                    requestBody.cursor = cursor;
+                  }
+
+                  const messagesResponse = await fetch(loadResponsesUrl, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody),
+                  });
+
+                  if (!messagesResponse.ok) {
+                    console.warn(
+                      `load-responses returned ${messagesResponse.status} on page ${pageCount}`
+                    );
+                    break;
+                  }
+
                   const data = await messagesResponse.json();
 
                   // The API returns { responses: [...] } array
                   if (data.responses && Array.isArray(data.responses)) {
-                    responses = data.responses;
+                    allResponses = allResponses.concat(data.responses);
+                  }
+
+                  // Check for pagination info (various possible field names)
+                  const hasMore = data.hasMore || data.hasNextPage || false;
+                  const nextCursor =
+                    data.nextCursor || data.cursor || data.nextPageToken || data.next || null;
+
+                  // Debug logging for pagination
+                  if (pageCount === 1) {
+                    console.log(`Fetched page 1: ${data.responses?.length || 0} messages`);
+                  } else {
+                    console.log(
+                      `Fetched page ${pageCount}: ${data.responses?.length || 0} messages (cursor: ${cursor ? 'yes' : 'no'})`
+                    );
+                  }
+
+                  // Stop if no more pages or no cursor to continue
+                  if (!hasMore && !nextCursor) {
+                    break;
+                  }
+
+                  // Update cursor for next iteration
+                  cursor = nextCursor;
+
+                  // Safety check: if cursor didn't change, break to avoid infinite loop
+                  if (!cursor) {
+                    break;
                   }
                 }
+
+                if (pageCount >= maxPages) {
+                  console.warn(
+                    `Reached maximum page limit (${maxPages}) for conversation ${conversationId}`
+                  );
+                }
+
+                console.log(
+                  `Total messages fetched across ${pageCount} page(s): ${allResponses.length}`
+                );
+                responses = allResponses;
               }
             }
           }

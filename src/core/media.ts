@@ -6,7 +6,7 @@
  */
 
 import fs from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, unlinkSync } from 'fs';
 import path from 'path';
 import axios, { AxiosInstance } from 'axios';
 import http from 'http';
@@ -103,9 +103,15 @@ export class MediaManager {
     }
 
     // Calculate optimal concurrency for media downloads
-    // More aggressive than conversation downloads since these are typically smaller files
+    // Conservative to avoid rate limits - retry logic will handle individual failures
     const cpuCount = os.cpus().length;
-    const concurrency = Math.max(3, Math.min(cpuCount, 15)); // Min 3, max 15
+    let concurrency = Math.max(2, Math.min(Math.floor(cpuCount / 2), 5)); // Min 2, max 5
+
+    // Grok is very aggressive with rate limiting - use sequential downloads
+    if (conversation.provider === 'grok-web') {
+      concurrency = 1;
+    }
+
     const limit = pLimit(concurrency);
 
     let completed = 0;
@@ -168,6 +174,11 @@ export class MediaManager {
           // Update progress
           completed++;
           onProgress?.(completed, total);
+
+          // Add delay between downloads for Grok to avoid rate limits
+          if (conversation.provider === 'grok-web' && completed < total) {
+            await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms delay between downloads
+          }
 
           return {
             status: downloadResult.skipped ? ('skipped' as const) : ('downloaded' as const),
@@ -296,6 +307,45 @@ export class MediaManager {
   }
 
   /**
+   * Download with retry logic for rate limits
+   */
+  private async downloadWithRetry<T>(
+    fn: () => Promise<T>,
+    maxRetries = 3,
+    baseDelay = 5000 // Increased from 2s to 5s for more conservative retry delays
+  ): Promise<T> {
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+
+        // Check if this is a 429 rate limit error
+        const is429 =
+          error.message?.includes('429') || error.message?.includes('Too Many Requests');
+
+        if (!is429 || attempt === maxRetries) {
+          // Not a rate limit error, or we've exhausted retries
+          throw error;
+        }
+
+        // Calculate delay with exponential backoff
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(
+          `Rate limit hit (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`
+        );
+
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
    * Download a single media file with deduplication
    */
   async downloadMedia(
@@ -308,20 +358,96 @@ export class MediaManager {
     accessToken?: string
   ): Promise<{ path: string; size: number; hash: string; skipped: boolean }> {
     // Download to temp location first to calculate hash
-    // Use timestamp + random bytes to ensure uniqueness with concurrent downloads
-    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    // Use timestamp + random bytes + counter to ensure uniqueness with concurrent downloads
+    // Increase random bytes from 4 to 8 to reduce collision probability
+    const randomSuffix = crypto.randomBytes(8).toString('hex');
     const tempPath = path.join(this.baseDir, '.temp', `download-${Date.now()}-${randomSuffix}`);
     await fs.mkdir(path.dirname(tempPath), { recursive: true });
 
+    let downloadResult: { hash: string; size: number; mimeType: string };
     try {
-      // Download file
-      const { hash, size, mimeType } = await this.downloadToFile(
-        url,
-        tempPath,
-        cookies,
-        accessToken
+      // Download file with retry logic for rate limits
+      downloadResult = await this.downloadWithRetry(() =>
+        this.downloadToFile(url, tempPath, cookies, accessToken)
       );
+    } catch (error: any) {
+      // Clean up temp file if it exists
+      if (existsSync(tempPath)) {
+        await fs.unlink(tempPath).catch(() => {});
+      }
 
+      // Lazy resolution for Grok images: If download fails with 404/403, try to resolve via assets API
+      const isGrokImage =
+        url.includes('grok.com') &&
+        url.includes('/generated/') &&
+        url.match(/\/([a-f0-9-]{36})\//i);
+      const is404or403 =
+        error.message?.includes('404') ||
+        error.message?.includes('403') ||
+        error.message?.includes('Not Found') ||
+        error.message?.includes('Forbidden');
+
+      if (isGrokImage && is404or403) {
+        // Extract asset ID from URL
+        const assetIdMatch = url.match(/\/generated\/([a-f0-9-]{36})\//i);
+        if (assetIdMatch) {
+          const assetId = assetIdMatch[1];
+
+          try {
+            // Fetch asset metadata to get proper URL
+            const assetApiUrl = `https://grok.com/rest/assets/${assetId}`;
+            const response = await fetch(assetApiUrl, {
+              headers: cookies
+                ? {
+                    Cookie: Object.entries(cookies)
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join('; '),
+                  }
+                : {},
+            });
+
+            if (response.ok) {
+              const assetData = await response.json();
+              if (assetData.key) {
+                const resolvedUrl = `https://assets.grok.com/${assetData.key}`;
+                console.log(`Resolved expired Grok URL via assets API: ${assetId}`);
+
+                // Retry download with resolved URL (temp file was cleaned up above)
+                downloadResult = await this.downloadWithRetry(() =>
+                  this.downloadToFile(resolvedUrl, tempPath, cookies, accessToken)
+                );
+              } else {
+                throw error; // No key field, can't resolve
+              }
+            } else {
+              throw error; // Assets API failed, re-throw original error
+            }
+          } catch {
+            // Clean up temp file again if resolution attempt created it
+            if (existsSync(tempPath)) {
+              await fs.unlink(tempPath).catch(() => {});
+            }
+            // If resolution fails, throw original download error
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    const { hash, size, mimeType } = downloadResult;
+
+    // Verify temp file actually exists after download
+    if (!existsSync(tempPath)) {
+      throw new Error(
+        `Download appeared to succeed but temp file doesn't exist: ${tempPath} (from ${url.substring(0, 100)}...)`
+      );
+    }
+
+    try {
       // Check if we already have this file
       if (this.registry[hash]) {
         // File already exists, just update references
@@ -365,11 +491,27 @@ export class MediaManager {
         await fs.copyFile(tempPath, permanentPath);
         await fs.unlink(tempPath);
       } catch (error: any) {
+        // Enhanced diagnostics for ENOENT errors
+        if (error.code === 'ENOENT') {
+          const tempExists = existsSync(tempPath);
+          const permDirExists = existsSync(path.dirname(permanentPath));
+          console.error(
+            `ENOENT during copyFile: temp=${tempPath} exists=${tempExists}, ` +
+              `permDir exists=${permDirExists}, url=${url.substring(0, 80)}`
+          );
+        }
+
         // Clean up temp file on error (check existence first)
         if (existsSync(tempPath)) {
           await fs.unlink(tempPath).catch(() => {});
         }
-        throw error;
+
+        // Add more context to help diagnose URL-specific failures
+        const enhancedError = new Error(
+          `Failed to download media from ${url.substring(0, 100)}...: ${error.message}`
+        );
+        enhancedError.stack = error.stack;
+        throw enhancedError;
       }
 
       // Add to registry
@@ -488,6 +630,8 @@ export class MediaManager {
 
     return new Promise((resolve, reject) => {
       const writer = createWriteStream(outputPath);
+      let finished = false;
+      let errored = false;
 
       response.data.on('data', (chunk: Buffer) => {
         hash.update(chunk);
@@ -497,6 +641,8 @@ export class MediaManager {
       response.data.pipe(writer);
 
       writer.on('finish', () => {
+        if (errored) return; // Don't resolve if we already errored
+        finished = true;
         const mimeType = response.headers['content-type'] || 'application/octet-stream';
         resolve({
           hash: hash.digest('hex'),
@@ -505,8 +651,24 @@ export class MediaManager {
         });
       });
 
-      writer.on('error', reject);
-      response.data.on('error', reject);
+      const handleError = (error: Error) => {
+        if (finished) return; // Don't error if we already finished
+        errored = true;
+        // Clean up partial file on error
+        writer.close();
+        try {
+          if (existsSync(outputPath)) {
+            // Use sync unlink to clean up partial file immediately
+            unlinkSync(outputPath);
+          }
+        } catch {
+          // Ignore cleanup errors
+        }
+        reject(error);
+      };
+
+      writer.on('error', handleError);
+      response.data.on('error', handleError);
     });
   }
 
