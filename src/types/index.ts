@@ -56,8 +56,8 @@ export interface Citation {
 
 export interface Attachment {
   id: string;
-  type: 'image' | 'video' | 'audio' | 'document' | 'code';
-  url: string;
+  type: 'image' | 'video' | 'audio' | 'document' | 'code' | 'artifact';
+  url?: string;
   localPath?: string;
   mimeType?: string;
   size?: number;
@@ -67,6 +67,11 @@ export interface Attachment {
     duration?: number;
     [key: string]: any;
   };
+  // Artifact-specific fields
+  title?: string;
+  artifactType?: string;
+  content?: string;
+  extension?: string;
 }
 
 export interface Conversation {

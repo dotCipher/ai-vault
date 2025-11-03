@@ -127,8 +127,29 @@ export class Storage {
       }
     }
 
+    // Save artifacts as separate files
+    await this.saveArtifacts(conversation, conversationDir);
+
     // Update index
     await this.updateIndex(conversation, conversationDir);
+  }
+
+  /**
+   * Save artifacts as separate files
+   */
+  private async saveArtifacts(conversation: Conversation, conversationDir: string): Promise<void> {
+    for (const message of conversation.messages) {
+      if (message.attachments) {
+        for (const attachment of message.attachments) {
+          // Only write artifacts that have content (not external URLs)
+          if (attachment.type === 'artifact' && attachment.content) {
+            const filename = `${this.sanitizeFilename(attachment.id)}${attachment.extension}`;
+            const artifactPath = path.join(conversationDir, filename);
+            await fs.writeFile(artifactPath, attachment.content, 'utf-8');
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -293,6 +314,12 @@ export class Storage {
         for (const attachment of message.attachments) {
           if (attachment.type === 'image') {
             lines.push(`- ![${attachment.id}](${attachment.url})`);
+          } else if (attachment.type === 'artifact' && attachment.content) {
+            // Reference local artifact file
+            const filename = `${this.sanitizeFilename(attachment.id)}${attachment.extension}`;
+            lines.push(
+              `- [${attachment.title || attachment.id}](${filename}) (${attachment.artifactType})`
+            );
           } else {
             lines.push(`- [${attachment.type}: ${attachment.id}](${attachment.url})`);
           }
