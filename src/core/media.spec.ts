@@ -129,6 +129,11 @@ describe('MediaManager', () => {
       // Mock axios.create to return our mock instance
       vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
+      // Mock existsSync to return true for temp files (for verification check)
+      vi.mocked(existsSync).mockImplementation((path: any) => {
+        return String(path).includes('.temp/download-');
+      });
+
       // Mock createWriteStream
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
@@ -140,6 +145,7 @@ describe('MediaManager', () => {
           }
           return mockWriteStream;
         }),
+        close: vi.fn(),
       };
       vi.mocked(createWriteStream).mockReturnValue(mockWriteStream as any);
     });
@@ -239,6 +245,11 @@ describe('MediaManager', () => {
       // Mock axios.create to return our mock instance
       vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
+      // Mock existsSync to return true for temp files (for verification check)
+      vi.mocked(existsSync).mockImplementation((path: any) => {
+        return String(path).includes('.temp/download-');
+      });
+
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
           if (event === 'finish') {
@@ -249,6 +260,7 @@ describe('MediaManager', () => {
           }
           return mockWriteStream;
         }),
+        close: vi.fn(),
       };
       vi.mocked(createWriteStream).mockReturnValue(mockWriteStream as any);
     });
@@ -459,6 +471,11 @@ describe('MediaManager', () => {
       // Mock axios.create to return our mock instance
       vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
+      // Mock existsSync to return true for temp files (for verification check)
+      vi.mocked(existsSync).mockImplementation((path: any) => {
+        return String(path).includes('.temp/download-');
+      });
+
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
           if (event === 'finish') {
@@ -469,6 +486,7 @@ describe('MediaManager', () => {
           }
           return mockWriteStream;
         }),
+        close: vi.fn(),
       };
       vi.mocked(createWriteStream).mockReturnValue(mockWriteStream as any);
     });
@@ -514,6 +532,11 @@ describe('MediaManager', () => {
       // Mock axios.create to return our mock instance
       vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
 
+      // Mock existsSync to return true for temp files (for verification check)
+      vi.mocked(existsSync).mockImplementation((path: any) => {
+        return String(path).includes('.temp/download-');
+      });
+
       const mockWriteStream = {
         on: vi.fn((event, handler) => {
           if (event === 'finish') {
@@ -524,6 +547,7 @@ describe('MediaManager', () => {
           }
           return mockWriteStream;
         }),
+        close: vi.fn(),
       };
       vi.mocked(createWriteStream).mockReturnValue(mockWriteStream as any);
     });
