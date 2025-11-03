@@ -29,7 +29,16 @@ async function detectProvider(filePath: string): Promise<string | null> {
   if (stat.isDirectory()) {
     const files = readdirSync(filePath);
 
-    // ChatGPT: has conversations.json
+    // Claude: has conversations.json, projects.json, and possibly memories.json
+    if (
+      files.includes('conversations.json') &&
+      files.includes('projects.json') &&
+      (files.includes('memories.json') || files.includes('users.json'))
+    ) {
+      return 'claude';
+    }
+
+    // ChatGPT: has conversations.json (without Claude-specific files)
     if (files.includes('conversations.json')) {
       return 'chatgpt';
     }
@@ -98,7 +107,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
       if (!detected) {
         clack.log.error('Could not auto-detect provider from export format.');
         clack.log.info('Please specify the provider with --provider flag');
-        clack.log.info('Supported providers: grok, grok-web, chatgpt');
+        clack.log.info('Supported providers: grok, grok-web, chatgpt, claude');
         process.exit(1);
       }
       provider = detected;
@@ -132,9 +141,12 @@ export async function importCommand(options: ImportOptions): Promise<void> {
       case 'chatgpt':
         ({ conversations, mediaDir: sourceMediaDir } = await importChatGPT(processPath));
         break;
+      case 'claude':
+        ({ conversations, mediaDir: sourceMediaDir } = await importClaude(processPath));
+        break;
       default:
         clack.log.error(`Import not yet supported for provider: ${provider}`);
-        clack.log.info('Supported providers: grok, grok-web, chatgpt');
+        clack.log.info('Supported providers: grok, grok-web, chatgpt, claude');
         process.exit(1);
     }
 
@@ -515,4 +527,170 @@ async function importChatGPT(
   spinner.stop(`✓ Parsed ${conversations.length} conversations`);
 
   return { conversations, mediaDir };
+}
+
+/**
+ * Import from Claude export
+ */
+async function importClaude(
+  filePath: string
+): Promise<{ conversations: Conversation[]; mediaDir?: string }> {
+  const spinner = clack.spinner();
+  spinner.start('Reading Claude export...');
+
+  const stat = statSync(filePath);
+  let baseDir: string;
+
+  if (stat.isDirectory()) {
+    baseDir = filePath;
+  } else {
+    throw new Error(
+      'Claude exports should be directories containing conversations.json and projects.json'
+    );
+  }
+
+  // Find required files
+  const conversationsFile = join(baseDir, 'conversations.json');
+  const projectsFile = join(baseDir, 'projects.json');
+
+  if (!existsSync(conversationsFile)) {
+    spinner.stop('Failed');
+    throw new Error('Could not find conversations.json in Claude export');
+  }
+
+  spinner.message('Parsing conversations...');
+
+  const conversationsData = JSON.parse(readFileSync(conversationsFile, 'utf-8'));
+  const conversationsList = Array.isArray(conversationsData)
+    ? conversationsData
+    : [conversationsData];
+
+  // Load projects for metadata (optional)
+  let projects: any[] = [];
+  if (existsSync(projectsFile)) {
+    const projectsData = JSON.parse(readFileSync(projectsFile, 'utf-8'));
+    projects = Array.isArray(projectsData) ? projectsData : [projectsData];
+  }
+
+  const conversations: Conversation[] = [];
+
+  for (const conv of conversationsList) {
+    const messages: Message[] = [];
+
+    // Process chat messages
+    const chatMessages = conv.chat_messages || [];
+
+    for (const chatMsg of chatMessages) {
+      const sender = chatMsg.sender;
+      const role = sender === 'human' ? 'user' : 'assistant';
+
+      // Process content array - Claude messages have multiple content blocks
+      const contentBlocks = chatMsg.content || [];
+      const textParts: string[] = [];
+      const thinkingParts: string[] = [];
+      const attachments: any[] = [];
+
+      for (const block of contentBlocks) {
+        const contentType = block.type;
+
+        if (contentType === 'text') {
+          // Regular text content
+          if (block.text) {
+            textParts.push(block.text);
+          }
+        } else if (contentType === 'thinking') {
+          // Extended thinking blocks (Claude-specific feature)
+          if (block.thinking) {
+            thinkingParts.push(`[Thinking: ${block.thinking}]`);
+          }
+        } else if (contentType === 'tool_use') {
+          // Tool use blocks (web search, artifacts, etc.)
+          if (block.name === 'artifacts' && block.input) {
+            // Extract and save artifact content
+            const artifactId = block.input.id || `artifact-${attachments.length}`;
+            const artifactType = block.input.type || 'text/plain';
+            const artifactTitle = block.input.title || 'Untitled Artifact';
+            const artifactContent = block.input.content || '';
+
+            // Determine file extension based on type
+            let extension = '.txt';
+            if (artifactType.includes('html')) extension = '.html';
+            else if (artifactType.includes('javascript') || artifactType.includes('react'))
+              extension = '.jsx';
+            else if (artifactType.includes('python')) extension = '.py';
+            else if (artifactType.includes('svg')) extension = '.svg';
+            else if (artifactType.includes('mermaid')) extension = '.mmd';
+
+            // Add artifact as attachment
+            attachments.push({
+              id: artifactId,
+              type: 'artifact',
+              title: artifactTitle,
+              artifactType: artifactType,
+              content: artifactContent,
+              extension: extension,
+            });
+
+            textParts.push(`[Artifact: ${artifactTitle}]`);
+          } else {
+            textParts.push(`[Tool: ${block.name || 'unknown'}]`);
+          }
+        } else if (contentType === 'tool_result') {
+          // Skip tool results for now or add as metadata
+          // Could be included in a future version
+        }
+      }
+
+      // Combine thinking and text (thinking first if present)
+      const fullContent = [...thinkingParts, ...textParts].join('\n\n').trim();
+
+      if (!fullContent) continue;
+
+      // Convert timestamp
+      const timestamp = chatMsg.created_at ? new Date(chatMsg.created_at) : new Date();
+
+      messages.push({
+        id: chatMsg.uuid,
+        role,
+        content: fullContent,
+        timestamp,
+        attachments: attachments.length > 0 ? attachments : undefined,
+        metadata: {
+          originalSender: sender,
+        },
+      });
+    }
+
+    // Skip conversations with no messages
+    if (messages.length === 0) continue;
+
+    // Convert timestamps
+    const createdAt = conv.created_at ? new Date(conv.created_at) : new Date();
+    const updatedAt = conv.updated_at ? new Date(conv.updated_at) : createdAt;
+
+    const conversation: Conversation = {
+      id: conv.uuid,
+      provider: 'claude',
+      title: conv.name || 'Untitled',
+      messages,
+      createdAt,
+      updatedAt,
+      metadata: {
+        messageCount: messages.length,
+        characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
+        mediaCount: 0, // Will be updated when we implement artifact/attachment support
+        summary: conv.summary, // Claude exports include AI-generated summaries
+      },
+    };
+
+    conversations.push(conversation);
+  }
+
+  spinner.stop(`✓ Parsed ${conversations.length} conversations`);
+
+  if (projects.length > 0) {
+    clack.log.info(`Found ${projects.length} projects in export`);
+  }
+
+  return { conversations, mediaDir: undefined };
 }

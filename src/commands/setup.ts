@@ -44,12 +44,6 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   // Check which provider to configure
   const providerName = provider as string;
 
-  // Check if not yet implemented
-  if (providerName === 'claude') {
-    clack.log.error(`${providerName} provider is not yet implemented`);
-    process.exit(1);
-  }
-
   // Check if already configured
   if (await isProviderConfigured(providerName)) {
     const overwrite = await clack.confirm({
@@ -70,6 +64,9 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
       break;
     case 'chatgpt':
       await setupChatGPT(options);
+      break;
+    case 'claude':
+      await setupClaude(options);
       break;
     default:
       clack.log.error(`${providerName} provider is not yet implemented`);
@@ -419,6 +416,124 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
 
   const providerConfig: ProviderConfig = {
     providerName: 'chatgpt',
+    authMethod: 'cookies',
+    cookies,
+  };
+
+  // Test authentication
+  const spinner = clack.spinner();
+  spinner.start('Testing authentication...');
+
+  try {
+    const provider = getProvider(providerConfig.providerName as any);
+    await provider.authenticate(providerConfig);
+    const isAuth = await provider.isAuthenticated();
+    await provider.cleanup?.();
+
+    if (!isAuth) {
+      spinner.stop('Authentication failed');
+      clack.log.error('Could not authenticate with provided credentials');
+      process.exit(1);
+    }
+
+    spinner.stop('✓ Authentication successful!');
+  } catch (error) {
+    spinner.stop('Authentication failed');
+    clack.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    process.exit(1);
+  }
+
+  // Save configuration
+  await saveProviderConfig(providerConfig);
+  clack.log.success('Configuration saved to ~/.ai-vault/config.json');
+
+  // Configure archive directory
+  const config = await loadConfig();
+  if (!config.settings?.archiveDir) {
+    console.log();
+    const customDir = await clack.text({
+      message: 'Archive directory (press Enter for default):',
+      placeholder: '~/ai-vault-data',
+    });
+
+    if (!clack.isCancel(customDir) && customDir) {
+      config.settings = config.settings || {};
+      config.settings.archiveDir = customDir as string;
+      const { saveConfig } = await import('../utils/config.js');
+      await saveConfig(config);
+      clack.log.info(`Archive directory set to: ${customDir}`);
+    }
+  }
+}
+
+async function setupClaude(options: SetupOptions): Promise<void> {
+  clack.log.step('Configuring Claude (Anthropic)');
+
+  let cookies: Record<string, string>;
+
+  // Read from file if provided
+  if (options.cookiesFile) {
+    try {
+      const filePath = resolve(options.cookiesFile);
+      const fileContent = readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(fileContent);
+
+      if (Array.isArray(parsed)) {
+        // Convert array format to object format
+        cookies = Object.fromEntries(parsed.map((cookie: any) => [cookie.name, cookie.value]));
+      } else {
+        // Already in object format
+        cookies = parsed;
+      }
+
+      clack.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
+    } catch (error) {
+      clack.log.error(
+        `Failed to read cookies file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      process.exit(1);
+    }
+  } else {
+    // Interactive prompt for sessionKey cookie
+    clack.log.info('To get your sessionKey cookie from Claude:');
+    clack.log.info('1. Open claude.ai in your browser and log in');
+    clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
+    clack.log.info('3. Go to Application → Cookies → https://claude.ai');
+    clack.log.info('4. Find the "sessionKey" cookie and copy its VALUE');
+    console.log();
+
+    const sessionKey = await clack.text({
+      message: 'Enter value for cookie "sessionKey":',
+      placeholder: 'sk-ant-... (108 characters total)',
+      validate: (val) => {
+        if (!val || val.trim().length === 0) {
+          return 'sessionKey is required';
+        }
+        const trimmed = val.trim();
+        if (!trimmed.startsWith('sk-ant-')) {
+          return 'sessionKey should start with "sk-ant-"';
+        }
+        if (trimmed.length !== 108) {
+          return `sessionKey should be exactly 108 characters (found ${trimmed.length})`;
+        }
+        return undefined;
+      },
+    });
+
+    if (clack.isCancel(sessionKey)) {
+      clack.cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    cookies = {
+      sessionKey: (sessionKey as string).trim(),
+    };
+
+    clack.log.success('sessionKey collected successfully!');
+  }
+
+  const providerConfig: ProviderConfig = {
+    providerName: 'claude',
     authMethod: 'cookies',
     cookies,
   };
