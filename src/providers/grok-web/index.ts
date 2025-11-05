@@ -116,13 +116,22 @@ export class GrokWebProvider extends BaseProvider {
       }
 
       // Transform to ConversationSummary format
+      // API fields: conversationId, createTime, modifyTime (not id, createdAt, updatedAt)
       return conversations.map((conv: any) => ({
-        id: conv.id || conv.conversationId || conv.uuid,
+        id: conv.conversationId || conv.id || conv.uuid,
         title: conv.title || conv.name || 'Untitled',
         messageCount: conv.messageCount || conv.messages?.length || 0,
-        createdAt: conv.createdAt ? new Date(conv.createdAt) : new Date(),
-        updatedAt: conv.updatedAt ? new Date(conv.updatedAt) : new Date(),
-        hasMedia: false, // Will be determined when fetching full conversation
+        createdAt: conv.createTime
+          ? new Date(conv.createTime)
+          : conv.createdAt
+            ? new Date(conv.createdAt)
+            : new Date(),
+        updatedAt: conv.modifyTime
+          ? new Date(conv.modifyTime)
+          : conv.updatedAt
+            ? new Date(conv.updatedAt)
+            : new Date(),
+        hasMedia: conv.mediaTypes && Array.isArray(conv.mediaTypes) && conv.mediaTypes.length > 0,
         preview: conv.preview || conv.lastMessage || undefined,
       }));
     } catch (error) {
