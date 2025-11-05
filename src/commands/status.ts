@@ -101,6 +101,11 @@ async function checkProviderStatus(
   config: any,
   options: StatusOptions
 ): Promise<void> {
+  // Track active spinners for cleanup on error
+  let fetchSpinner: ReturnType<typeof ora> | undefined;
+  let archiveSpinner: ReturnType<typeof ora> | undefined;
+  let hierarchyCheckSpinner: ReturnType<typeof ora> | undefined;
+
   try {
     // Initialize provider
     const spinner = ora(`Connecting to ${providerName}...`).start();
@@ -142,16 +147,17 @@ async function checkProviderStatus(
     const limit = options.limit ? parseInt(options.limit, 10) : undefined;
 
     // Fetch remote conversation list
-    const fetchSpinner = ora('Fetching remote conversations...').start();
+    fetchSpinner = ora('Fetching remote conversations...').start();
     const remoteConversations = await provider.listConversations({
       since,
       until,
       limit,
     });
     fetchSpinner.succeed(`Found ${remoteConversations.length} remote conversations`);
+    fetchSpinner = undefined;
 
     // Load local archive
-    const archiveSpinner = ora('Loading local archive...').start();
+    archiveSpinner = ora('Loading local archive...').start();
     let archiveDir = config.settings?.archiveDir;
 
     // Expand ~ to home directory
@@ -166,6 +172,7 @@ async function checkProviderStatus(
     const storage = (archiver as any).storage;
     const localIndex = await storage.getIndex(providerName);
     archiveSpinner.succeed(`Found ${Object.keys(localIndex).length} local conversations`);
+    archiveSpinner = undefined;
 
     // Calculate diff
     const diff: DiffResult = {
@@ -178,7 +185,7 @@ async function checkProviderStatus(
     const localConversationIds = new Set(Object.keys(localIndex));
 
     // Check for hierarchy changes by sampling a few conversations
-    const hierarchyCheckSpinner = ora('Checking for hierarchy changes...').start();
+    hierarchyCheckSpinner = ora('Checking for hierarchy changes...').start();
     const conversationsToCheck = remoteConversations
       .filter((remote) => localConversationIds.has(remote.id))
       .slice(0, Math.min(20, remoteConversations.length)); // Sample first 20 for performance
@@ -250,6 +257,7 @@ async function checkProviderStatus(
       }
     }
     hierarchyCheckSpinner.succeed(`Checked ${conversationsToCheck.length} conversations`);
+    hierarchyCheckSpinner = undefined;
 
     for (const remote of remoteConversations) {
       if (!localConversationIds.has(remote.id)) {
@@ -395,6 +403,11 @@ async function checkProviderStatus(
       await provider.cleanup();
     }
   } catch (error: any) {
+    // Stop any active spinners
+    if (fetchSpinner) fetchSpinner.fail('Failed to fetch remote conversations');
+    if (archiveSpinner) archiveSpinner.fail('Failed to load local archive');
+    if (hierarchyCheckSpinner) hierarchyCheckSpinner.fail('Failed to check hierarchy');
+
     console.error(chalk.red(`\n✗ Error (${providerName}):`, error.message));
 
     // Provide helpful guidance for authentication errors
