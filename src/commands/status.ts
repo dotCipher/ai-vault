@@ -396,6 +396,22 @@ async function checkProviderStatus(
     }
   } catch (error: any) {
     console.error(chalk.red(`\n✗ Error (${providerName}):`, error.message));
+
+    // Provide helpful guidance for authentication errors
+    if (
+      error.message.includes('401') ||
+      error.message.includes('session') ||
+      error.message.includes('cookies') ||
+      error.message.includes('authentication') ||
+      error.message.includes('unauthorized')
+    ) {
+      console.error(
+        chalk.yellow(`\n💡 Your session cookies appear to be expired. To fix this, run:`)
+      );
+      console.error(chalk.bold.cyan(`   ai-vault setup --provider ${providerName}`));
+      console.error(chalk.gray('\nThis will guide you through updating your session cookies.\n'));
+    }
+
     // Don't exit - continue with other providers
   }
 }
