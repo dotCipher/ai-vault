@@ -1,3 +1,17 @@
+# [1.17.0](https://github.com/dotCipher/ai-vault/compare/v1.16.0...v1.17.0) (2025-11-06)
+
+### Bug Fixes
+
+- **grok:** use correct API field names for conversation timestamps ([815e9d4](https://github.com/dotCipher/ai-vault/commit/815e9d4471054a1a2cadee2843cb9538394d0301))
+- **release:** add NPM_TOKEN back for provenance fallback ([d7fa6f8](https://github.com/dotCipher/ai-vault/commit/d7fa6f854bd56b6b7e47f6b04d02095ea7eca8d9))
+- **release:** set NODE_AUTH_TOKEN for setup-node npmrc ([eee5667](https://github.com/dotCipher/ai-vault/commit/eee566735f51f17a8fb847168004f04a03037fc8))
+- **status:** stop spinners on error to prevent hanging ([14ccd33](https://github.com/dotCipher/ai-vault/commit/14ccd33e04b47271394ab2c05742860427b39fcf))
+
+### Features
+
+- **release:** switch to NPM provenance authentication ([c0f5422](https://github.com/dotCipher/ai-vault/commit/c0f5422ef3e3349d6a8496e41e1dbac60673adf7))
+- **status:** improve error messaging for authentication failures ([0a4ef6e](https://github.com/dotCipher/ai-vault/commit/0a4ef6e33c9a53b77ff98a94221d2bd6f350c8d9))
+
 # [1.16.0](https://github.com/dotCipher/ai-vault/compare/v1.15.0...v1.16.0) (2025-11-03)
 
 ### Features
