@@ -5,7 +5,7 @@
  * Does not run as a daemon - just configures native OS schedulers
  */
 
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import { platform } from 'os';
 import fs from 'fs/promises';
@@ -34,8 +34,20 @@ export class Scheduler {
       return 'npm run dev --';
     }
 
-    // Try to find installed binary
-    return 'ai-vault';
+    // Get the full path to the installed binary
+    // This is important for cron jobs which don't have the same PATH
+    try {
+      const command = this.platform === 'win32' ? 'where ai-vault' : 'which ai-vault';
+      const result = execSync(command, {
+        encoding: 'utf-8',
+      });
+      // On Windows, 'where' can return multiple paths, so take the first one
+      return result.toString().trim().split('\n')[0];
+    } catch {
+      // Fallback to just 'ai-vault' if which/where fails
+      // This shouldn't happen in normal installations, but provides a fallback
+      return 'ai-vault';
+    }
   }
 
   /**
