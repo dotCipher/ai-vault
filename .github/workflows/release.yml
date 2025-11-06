@@ -43,19 +43,6 @@ jobs:
         id: version_before
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Debug NPM Token
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "❌ NPM_TOKEN is not set"
-            exit 1
-          else
-            echo "✅ NPM_TOKEN is set"
-            echo "Length: ${#NPM_TOKEN}"
-            echo "Prefix: ${NPM_TOKEN:0:8}..."
-          fi
-
       - name: Release
         id: semantic
         env:
