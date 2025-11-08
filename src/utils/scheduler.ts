@@ -312,10 +312,10 @@ export class Scheduler {
   // ========== Helpers ==========
 
   /**
-   * Build the archive command to run
+   * Build the backup command to run
    */
   private buildArchiveCommand(schedule: ScheduleConfig): string {
-    const args: string[] = [this.cliPath, 'archive', `--provider "${schedule.provider}"`];
+    const args: string[] = [this.cliPath, 'backup', `--provider "${schedule.provider}"`];
 
     if (schedule.options.downloadMedia === false) {
       args.push('--skip-media');
