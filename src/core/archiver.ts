@@ -141,7 +141,7 @@ export class Archiver {
         conversationsToArchive = conversationsToArchive.slice(0, options.limit);
       }
 
-      console.log(chalk.cyan(`\nArchiving ${conversationsToArchive.length} conversations...\n`));
+      console.log(chalk.cyan(`\nBacking up ${conversationsToArchive.length} conversations...\n`));
 
       // Enable batch mode for storage operations (deferred index updates)
       if (!options.dryRun) {
@@ -371,8 +371,13 @@ export class Archiver {
 
             // Add media errors
             for (const error of taskResult.mediaResult.errors) {
-              console.log(chalk.red(`  Media download failed: ${error.url}`));
-              console.log(chalk.gray(`  Error: ${error.error}`));
+              // Use yellow for 404 (expected expiration), red for other errors
+              const isExpired = error.error.includes('404') || error.error.includes('expired');
+              const color = isExpired ? chalk.yellow : chalk.red;
+              const prefix = isExpired ? '⚠ Media file expired' : '✗ Media download failed';
+
+              console.log(color(`  ${prefix}: ${error.url.substring(0, 100)}...`));
+              console.log(chalk.gray(`  ${error.error}`));
               result.errors.push({
                 id: taskResult.summary.id,
                 type: 'media',
@@ -465,7 +470,7 @@ export class Archiver {
    */
   private printSummary(result: ArchiveResult, dryRun: boolean): void {
     console.log(chalk.bold('\n═══════════════════════════════════════'));
-    console.log(chalk.bold('Archive Summary'));
+    console.log(chalk.bold('Backup Summary'));
     console.log(chalk.bold('═══════════════════════════════════════\n'));
 
     if (dryRun) {

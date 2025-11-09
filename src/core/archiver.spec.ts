@@ -521,7 +521,7 @@ describe('Archiver', () => {
     it('should print summary with all statistics', async () => {
       await archiver.archive(mockProvider);
 
-      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Archive Summary'));
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Backup Summary'));
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Archived: '));
     });
 

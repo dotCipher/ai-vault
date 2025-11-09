@@ -575,12 +575,32 @@ export class MediaManager {
     // This applies to all media types: audio, images, documents, videos
     if (url.includes('chatgpt.com/backend-api/files/download/')) {
       try {
+        if (process.env.DEBUG) {
+          console.log(`[DEBUG] Fetching ChatGPT file metadata from: ${url}`);
+          console.log(`[DEBUG] Headers:`, {
+            hasAuth: !!headers['Authorization'],
+            hasCookie: !!headers['Cookie'],
+          });
+        }
+
         const metadataResponse = await this.getHttpClient().get(url, {
           headers,
           validateStatus: (status) => status < 500,
         });
 
+        if (process.env.DEBUG) {
+          console.log(`[DEBUG] Metadata response status: ${metadataResponse.status}`);
+          console.log(`[DEBUG] Metadata response data:`, metadataResponse.data);
+        }
+
         if (metadataResponse.status >= 400) {
+          // Provide more context for 404 errors - files may have expired
+          if (metadataResponse.status === 404) {
+            throw new Error(
+              `File not found (404) - File may have expired or been deleted from ChatGPT's servers. ` +
+                `This is normal for older files as ChatGPT doesn't keep media forever.`
+            );
+          }
           throw new Error(`HTTP ${metadataResponse.status}: ${metadataResponse.statusText}`);
         }
 
