@@ -1,3 +1,45 @@
+# [2.0.0](https://github.com/dotCipher/ai-vault/compare/v1.17.0...v2.0.0) (2025-11-09)
+
+### Bug Fixes
+
+- **grok-web:** prevent 'Invalid string length' error in page.evaluate() ([#17](https://github.com/dotCipher/ai-vault/issues/17)) ([7d46046](https://github.com/dotCipher/ai-vault/commit/7d460466e0b8207565b7de61ecb1f5e3ea380031))
+
+### BREAKING CHANGES
+
+- **grok-web:** The primary command is now 'backup' instead of 'archive'.
+  The 'archive' command remains available as a deprecated alias with a warning.
+
+Changes:
+
+- Renamed 'archive' command to 'backup' in CLI
+- Added 'archive' as deprecated alias with warning message
+- Updated all help text to use 'backup' terminology
+- Updated scheduler to use 'backup' command
+- Updated package.json description
+- Archive alias will be removed in version 2.0.0
+
+* fix(grok-web): prevent 'Invalid string length' error in page.evaluate()
+
+Removed console.log inside page.evaluate() that could cause massive string
+output when scraping many conversations, leading to 'Invalid string length'
+errors and segfaults.
+
+Also added:
+
+- Cloudflare challenge detection and waiting
+- API with DOM scraping fallback for listConversations
+- Support for new Grok URL format (/c/ instead of /chat/)
+- Better error handling for authentication
+- Browser stealth enhancements (Firefox support, bot detection bypass)
+
+Fixes the segfault issue when running full backups with many conversations.
+
+- fix(types): disable eslint ban-ts-comment rule for stealth modifications
+
+Added eslint-disable-next-line comments to suppress ban-ts-comment warnings
+where @ts-ignore is intentionally used instead of @ts-expect-error (because
+these are not actual TypeScript errors, just warnings we want to suppress).
+
 # [1.17.0](https://github.com/dotCipher/ai-vault/compare/v1.16.0...v1.17.0) (2025-11-06)
 
 ### Bug Fixes
