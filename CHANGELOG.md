@@ -1,3 +1,9 @@
+## [2.0.1](https://github.com/dotCipher/ai-vault/compare/v2.0.0...v2.0.1) (2025-11-09)
+
+### Bug Fixes
+
+- improve media download error messages for expired files ([1e8f249](https://github.com/dotCipher/ai-vault/commit/1e8f2495004ff6058eff175f738fa068f04d98f5))
+
 # [2.0.0](https://github.com/dotCipher/ai-vault/compare/v1.17.0...v2.0.0) (2025-11-09)
 
 ### Bug Fixes
