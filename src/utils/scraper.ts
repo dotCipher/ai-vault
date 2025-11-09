@@ -7,9 +7,11 @@ import { chromium as playwrightChromium, firefox, type Browser, type Page } from
 // Dynamically import playwright-extra and stealth plugin for better bot detection bypass
 let stealthChromium: any = null;
 try {
-  // @ts-expect-error - Dynamic import for optional stealth support
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore - Dynamic import for optional stealth support
   const { chromium: playwrightExtraChromium } = await import('playwright-extra');
-  // @ts-expect-error - Dynamic import for optional stealth plugin
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore - Dynamic import for optional stealth plugin
   const StealthPlugin = (await import('puppeteer-extra-plugin-stealth')).default;
   playwrightExtraChromium.use(StealthPlugin());
   stealthChromium = playwrightExtraChromium;
@@ -132,7 +134,8 @@ export class BrowserScraper {
         });
 
         // Override chrome property with realistic values
-        // @ts-expect-error - Adding chrome property for stealth
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - Adding chrome property for stealth
         window.chrome = {
           runtime: {},
           loadTimes: function () {},
@@ -152,7 +155,8 @@ export class BrowserScraper {
 
         // Override permissions
         const originalQuery = window.navigator.permissions.query;
-        // @ts-expect-error - Override for stealth
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - Override for stealth
         window.navigator.permissions.query = (parameters: any) =>
           parameters.name === 'notifications'
             ? Promise.resolve({ state: Notification.permission } as any)
@@ -164,7 +168,8 @@ export class BrowserScraper {
         });
 
         // Mock battery API
-        // @ts-expect-error - Adding getBattery for stealth
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - Adding getBattery for stealth
         navigator.getBattery = () =>
           Promise.resolve({
             charging: true,
@@ -174,7 +179,8 @@ export class BrowserScraper {
           });
 
         // Add connection info
-        // @ts-expect-error - Adding connection property for stealth
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - Adding connection property for stealth
         Object.defineProperty(navigator, 'connection', {
           get: () => ({
             effectiveType: '4g',
