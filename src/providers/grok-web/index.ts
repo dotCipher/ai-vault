@@ -68,18 +68,27 @@ export class GrokWebProvider extends BaseProvider {
       domain: '.grok.com',
     });
 
-    await page.goto('https://grok.com', { waitUntil: 'networkidle', timeout: 30000 });
+    try {
+      await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    // Check if we're redirected to login
-    const url = page.url();
-    const isAuthenticated = !url.includes('/login') && !url.includes('/oauth');
+      // Wait for Cloudflare challenge if present
+      await this.waitForCloudflareChallenge(page);
 
-    await page.close();
-    return isAuthenticated;
+      // Check if we're redirected to login
+      const url = page.url();
+      const isAuthenticated =
+        !url.includes('/login') && !url.includes('/oauth') && !url.includes('/sign-in');
+
+      await page.close();
+      return isAuthenticated;
+    } catch (error) {
+      await page.close();
+      throw error;
+    }
   }
 
   /**
-   * List all conversations from grok.com REST API
+   * List all conversations from grok.com (with API and DOM scraping fallback)
    */
   async listConversations(options?: ListConversationsOptions): Promise<ConversationSummary[]> {
     this.requireAuth();
@@ -89,51 +98,216 @@ export class GrokWebProvider extends BaseProvider {
     });
 
     try {
-      // Use the REST API instead of scraping HTML
       const pageSize = options?.limit || 60;
-      const apiUrl = `https://grok.com/rest/app-chat/conversations?pageSize=${pageSize}`;
 
-      // Navigate to grok.com first to establish session
-      await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      // Navigate to grok.com first to establish session (60s timeout for Cloudflare)
+      await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-      // Make API request using page context (authenticated with cookies)
-      const response = await page.evaluate(async (url) => {
-        const res = await fetch(url, {
-          method: 'GET',
-          credentials: 'include',
+      // Wait for Cloudflare challenge if present
+      await this.waitForCloudflareChallenge(page);
+
+      // Extra wait to ensure session is fully established
+      await page.waitForTimeout(3000);
+
+      // Try API first, fall back to DOM scraping if it fails
+      let conversations: ConversationSummary[] = [];
+      let apiSuccess = false;
+
+      try {
+        const apiUrl = `https://grok.com/rest/app-chat/conversations?pageSize=${pageSize}`;
+        const response = await page.evaluate(async (url) => {
+          const res = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+          });
+
+          // Check if response is OK
+          if (!res.ok) {
+            return { error: `API returned ${res.status}`, status: res.status };
+          }
+
+          // Check content type to ensure it's JSON
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            return { error: `Expected JSON but got: ${contentType}`, status: res.status };
+          }
+
+          return await res.json();
+        }, apiUrl);
+
+        // If we got an error object, throw to trigger fallback
+        if (response.error) {
+          console.warn(`API request failed: ${response.error}, falling back to DOM scraping...`);
+          throw new Error(response.error);
+        }
+
+        // Parse API response
+        const conversationsData = response.conversations || response.data || response;
+
+        if (Array.isArray(conversationsData)) {
+          conversations = conversationsData.map((conv: any) => ({
+            id: conv.conversationId || conv.id || conv.uuid,
+            title: conv.title || conv.name || 'Untitled',
+            messageCount: conv.messageCount || conv.messages?.length || 0,
+            createdAt: conv.createTime
+              ? new Date(conv.createTime)
+              : conv.createdAt
+                ? new Date(conv.createdAt)
+                : new Date(),
+            updatedAt: conv.modifyTime
+              ? new Date(conv.modifyTime)
+              : conv.updatedAt
+                ? new Date(conv.updatedAt)
+                : new Date(),
+            hasMedia:
+              conv.mediaTypes && Array.isArray(conv.mediaTypes) && conv.mediaTypes.length > 0,
+            preview: conv.preview || conv.lastMessage || undefined,
+          }));
+          apiSuccess = true;
+        }
+      } catch (apiError) {
+        console.warn('API failed, using DOM scraping fallback:', apiError);
+      }
+
+      // Fallback to DOM scraping if API failed
+      if (!apiSuccess) {
+        console.log('Scraping conversation list from DOM...');
+
+        // Navigate to history page where conversations are listed
+        await page.goto('https://grok.com/history?tab=conversations', {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
         });
-        return await res.json();
-      }, apiUrl);
+
+        // Wait for actual conversation content to load instead of fixed timeout
+        // This is smarter than waiting a fixed time
+        try {
+          // Wait for either conversation links OR the "no conversations" state
+          await page.waitForFunction(
+            () => {
+              // Check if conversations loaded
+              const hasConversations = document.querySelectorAll('a[href*="/chat/"]').length > 0;
+
+              // Check if we're past the loading state (no "Making sure you're human" message)
+              const isLoading = document.body.innerText.includes('Making sure');
+
+              // Check if page content has loaded (specific to Grok)
+              const hasHistoryContent =
+                document.querySelector('[class*="history"]') ||
+                document.querySelector('[class*="History"]') ||
+                document.body.innerText.includes('History');
+
+              return (hasConversations || hasHistoryContent) && !isLoading;
+            },
+            { timeout: 30000 }
+          );
+
+          // Additional small wait to ensure content is fully rendered
+          await page.waitForTimeout(2000);
+        } catch {
+          // If waiting times out, continue anyway - DOM scraping will handle empty results
+          console.warn('Timeout waiting for conversation content, continuing with scraping...');
+        }
+
+        // Extract conversations from DOM
+        const scrapedData = await page.evaluate((limit) => {
+          // Try multiple possible selectors for conversation items
+          const conversationSelectors = [
+            '[data-testid="conversation-item"]',
+            '[data-conversation-id]',
+            'a[href^="/c/"]', // Grok changed URLs from /chat/ to /c/
+            'a[href^="/chat/"]', // Keep old pattern as fallback
+            '[class*="conversation"]',
+            '[class*="chat-item"]',
+            'div[role="button"][class*="chat"]',
+            'nav a[href*="/c/"]',
+            'nav a[href*="/chat/"]',
+          ];
+
+          let conversationElements: Element[] = [];
+
+          for (const selector of conversationSelectors) {
+            const elements = Array.from(document.querySelectorAll(selector));
+            if (elements.length > 0) {
+              conversationElements = elements;
+              // Don't log inside page.evaluate to avoid overwhelming output
+              break;
+            }
+          }
+
+          // If we still don't have conversations, try to find links to conversation pages
+          if (conversationElements.length === 0) {
+            const allLinks = Array.from(document.querySelectorAll('a[href]'));
+            conversationElements = allLinks.filter((link) => {
+              const href = link.getAttribute('href') || '';
+              // Grok uses /c/ for conversations now (changed from /chat/)
+              return (href.includes('/c/') || href.includes('/chat/')) && href.length > 10;
+            });
+          }
+
+          // Extract data from found elements
+          const results = conversationElements.slice(0, limit).map((el, idx) => {
+            // Extract ID from href (support both /c/ and /chat/ patterns)
+            const link =
+              el.getAttribute('href') || el.querySelector('a')?.getAttribute('href') || '';
+            const idMatch = link.match(/\/(?:c|chat)\/([a-zA-Z0-9_-]+)/);
+            const id = idMatch ? idMatch[1] : `unknown-${idx}`;
+
+            // Extract title - try multiple approaches
+            let title = 'Untitled';
+            const titleEl = el.querySelector('[class*="title"]') || el.querySelector('h3, h4');
+            if (titleEl?.textContent) {
+              title = titleEl.textContent.trim();
+            } else if (el.textContent) {
+              // Use first substantial text content
+              const text = el.textContent.trim();
+              const lines = text.split('\n').filter((l) => l.trim().length > 0);
+              title = lines[0]?.substring(0, 100) || 'Untitled';
+            }
+
+            // Try to extract timestamp
+            const timeEl = el.querySelector('time');
+            let updatedAt = new Date();
+            if (timeEl) {
+              const datetime = timeEl.getAttribute('datetime');
+              if (datetime) {
+                updatedAt = new Date(datetime);
+              }
+            }
+
+            return {
+              id,
+              title,
+              messageCount: 0, // Can't determine from DOM
+              createdAt: updatedAt,
+              updatedAt,
+              hasMedia: false,
+              preview: undefined,
+            };
+          });
+
+          return results;
+        }, pageSize);
+
+        if (scrapedData.length > 0) {
+          conversations = scrapedData.map((conv: any) => ({
+            ...conv,
+            createdAt: new Date(conv.createdAt),
+            updatedAt: new Date(conv.updatedAt),
+          }));
+          console.log(`Successfully scraped ${conversations.length} conversations from DOM`);
+        } else {
+          console.warn('No conversations found via DOM scraping');
+        }
+      }
 
       await page.close();
 
-      // Parse API response
-      // Expected format: { conversations: [...] } or similar
-      const conversations = response.conversations || response.data || response;
-
-      if (!Array.isArray(conversations)) {
-        throw new Error('Unexpected API response format');
+      if (conversations.length === 0) {
+        console.warn('No conversations found via API or DOM scraping');
       }
 
-      // Transform to ConversationSummary format
-      // API fields: conversationId, createTime, modifyTime (not id, createdAt, updatedAt)
-      return conversations.map((conv: any) => ({
-        id: conv.conversationId || conv.id || conv.uuid,
-        title: conv.title || conv.name || 'Untitled',
-        messageCount: conv.messageCount || conv.messages?.length || 0,
-        createdAt: conv.createTime
-          ? new Date(conv.createTime)
-          : conv.createdAt
-            ? new Date(conv.createdAt)
-            : new Date(),
-        updatedAt: conv.modifyTime
-          ? new Date(conv.modifyTime)
-          : conv.updatedAt
-            ? new Date(conv.updatedAt)
-            : new Date(),
-        hasMedia: conv.mediaTypes && Array.isArray(conv.mediaTypes) && conv.mediaTypes.length > 0,
-        preview: conv.preview || conv.lastMessage || undefined,
-      }));
+      return conversations;
     } catch (error) {
       await page.close();
       throw new Error(`Failed to list conversations: ${error}`);
@@ -151,8 +325,8 @@ export class GrokWebProvider extends BaseProvider {
     });
 
     try {
-      // Navigate to the conversation page first to establish proper session context
-      const url = `https://grok.com/chat/${id}`;
+      // Navigate to the conversation page (Grok uses /c/ for conversations now)
+      const url = `https://grok.com/c/${id}`;
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
       // Wait for page to be ready
@@ -1027,6 +1201,45 @@ export class GrokWebProvider extends BaseProvider {
     const cleanUrl = url.startsWith('/') ? url.slice(1) : url;
 
     return `${baseUrl}/${cleanUrl}`;
+  }
+
+  /**
+   * Wait for Cloudflare challenge to complete
+   */
+  private async waitForCloudflareChallenge(page: any): Promise<void> {
+    try {
+      // Wait a bit for potential Cloudflare challenge
+      await page.waitForTimeout(2000);
+
+      // Check if we're on a Cloudflare challenge page
+      const isChallenging = await page.evaluate(() => {
+        return (
+          document.title.includes('Just a moment') ||
+          document.body?.textContent?.includes('Checking your browser') ||
+          document.querySelector('#challenge-running') !== null
+        );
+      });
+
+      if (isChallenging) {
+        console.log('Cloudflare challenge detected, waiting...');
+        // Wait up to 30 seconds for Cloudflare to complete
+        await page.waitForFunction(
+          () => {
+            return (
+              !document.title.includes('Just a moment') &&
+              !document.body?.textContent?.includes('Checking your browser') &&
+              document.querySelector('#challenge-running') === null
+            );
+          },
+          { timeout: 30000 }
+        );
+        // Extra wait for page to stabilize
+        await page.waitForTimeout(2000);
+      }
+    } catch {
+      // If waiting for Cloudflare times out, continue anyway
+      console.warn('Cloudflare challenge wait timed out, continuing...');
+    }
   }
 
   /**

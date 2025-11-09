@@ -20,7 +20,7 @@ const program = new Command();
 program
   .name('ai-vault')
   .description(
-    'Own your data. Comprehensive archival of AI interactions—conversations, images, videos, code artifacts, and metadata—across multiple platforms.'
+    'Own your data. Comprehensive backup of AI interactions—conversations, images, videos, code artifacts, and metadata—across multiple platforms.'
   );
 
 program
@@ -40,18 +40,28 @@ program
   });
 
 program
-  .command('archive')
-  .description('Archive conversations from configured providers')
-  .option('-p, --provider <provider>', 'Specific provider to archive')
+  .command('backup')
+  .alias('archive')
+  .description('Backup conversations from configured providers')
+  .option('-p, --provider <provider>', 'Specific provider to backup')
   .option('-o, --output <directory>', 'Output directory (overrides config)')
-  .option('--since <date>', 'Archive conversations since date (YYYY-MM-DD)')
-  .option('--until <date>', 'Archive conversations until date (YYYY-MM-DD)')
-  .option('--limit <number>', 'Maximum number of conversations to archive')
-  .option('--dry-run', 'Preview what would be archived without downloading')
+  .option('--since <date>', 'Backup conversations since date (YYYY-MM-DD)')
+  .option('--until <date>', 'Backup conversations until date (YYYY-MM-DD)')
+  .option('--limit <number>', 'Maximum number of conversations to backup')
+  .option('--dry-run', 'Preview what would be backed up without downloading')
   .option('--skip-media', 'Skip downloading media files (images, videos)')
-  .option('--ids <ids...>', 'Specific conversation IDs to archive')
+  .option('--ids <ids...>', 'Specific conversation IDs to backup')
   .option('-y, --yes', 'Skip confirmation prompt')
   .action(async (options) => {
+    // Show deprecation warning if using 'archive' alias
+    const command = program.args[0];
+    if (command === 'archive') {
+      console.log(
+        chalk.yellow('⚠ Warning: "archive" is deprecated. Please use "backup" instead.')
+      );
+      console.log(chalk.gray('  The "archive" command will be removed in version 2.0.0\n'));
+    }
+
     const { archiveCommand } = await import('./commands/archive.js');
     await archiveCommand({
       provider: options.provider,
@@ -108,14 +118,14 @@ program
 
 program
   .command('schedule')
-  .description('Manage automated archiving schedules')
+  .description('Manage automated backup schedules')
   .argument('[action]', 'Action: add, list, remove, enable, disable, status')
   .option('--id <id>', 'Schedule ID (for remove/enable/disable)')
   .option('-p, --provider <provider>', 'Provider to schedule')
   .option('--cron <expression>', 'Cron expression (e.g., "0 2 * * *")')
   .option('--description <text>', 'Schedule description')
-  .option('--limit <number>', 'Maximum conversations to archive per run')
-  .option('--since-days <days>', 'Only archive conversations from last N days')
+  .option('--limit <number>', 'Maximum conversations to backup per run')
+  .option('--since-days <days>', 'Only backup conversations from last N days')
   .option('--skip-media', 'Skip downloading media files')
   .action(async (action, options) => {
     const { scheduleCommand } = await import('./commands/schedule.js');
