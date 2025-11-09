@@ -93,6 +93,8 @@ describe('GrokWebProvider', () => {
         goto: vi.fn().mockResolvedValue(undefined),
         url: vi.fn().mockReturnValue('https://grok.com'),
         close: vi.fn().mockResolvedValue(undefined),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
+        evaluate: vi.fn().mockResolvedValue(false), // Not a Cloudflare challenge
       };
 
       const { mockScraper } = mockBrowserScraper(mockPage);
@@ -106,8 +108,8 @@ describe('GrokWebProvider', () => {
         domain: '.grok.com',
       });
       expect(mockPage.goto).toHaveBeenCalledWith('https://grok.com', {
-        waitUntil: 'networkidle',
-        timeout: 30000,
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
       });
     });
 
@@ -125,6 +127,8 @@ describe('GrokWebProvider', () => {
         goto: vi.fn().mockResolvedValue(undefined),
         url: vi.fn().mockReturnValue('https://grok.com/login'),
         close: vi.fn().mockResolvedValue(undefined),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
+        evaluate: vi.fn().mockResolvedValue(false), // Not a Cloudflare challenge
       };
 
       mockBrowserScraper(mockPage);
@@ -177,6 +181,7 @@ describe('GrokWebProvider', () => {
         url: vi.fn().mockReturnValue('https://grok.com'),
         evaluate: vi.fn().mockResolvedValue(mockApiResponse),
         close: vi.fn().mockResolvedValue(undefined),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
       };
 
       mockBrowserScraper(mockPage);
@@ -298,6 +303,8 @@ describe('GrokWebProvider', () => {
         goto: vi.fn().mockResolvedValue(undefined),
         url: vi.fn().mockReturnValue('https://grok.com'),
         close: vi.fn().mockResolvedValue(undefined),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
+        evaluate: vi.fn().mockResolvedValue(false), // Not a Cloudflare challenge
       };
 
       const { mockScraper } = mockBrowserScraper(mockPage);
