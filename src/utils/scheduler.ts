@@ -317,6 +317,12 @@ export class Scheduler {
   private buildArchiveCommand(schedule: ScheduleConfig): string {
     const args: string[] = [this.cliPath, 'backup', `--provider "${schedule.provider}"`];
 
+    // Add schedule ID for status tracking
+    args.push(`--schedule-id "${schedule.id}"`);
+
+    // Skip confirmation prompt for scheduled runs
+    args.push('--yes');
+
     if (schedule.options.downloadMedia === false) {
       args.push('--skip-media');
     }
