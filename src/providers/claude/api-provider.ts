@@ -1,11 +1,14 @@
 /**
- * Claude Provider - API-First Implementation
+ * Claude Provider - Strategy-Based Implementation
  *
- * This is an improved implementation that supports both:
- * 1. Anthropic API (preferred) - using official API keys
- * 2. Claude.ai web platform (fallback) - using cookie-based auth
+ * Uses pluggable authentication architecture with cookie-based auth.
  *
- * The provider automatically selects the best authentication method.
+ * NOTE: Only cookie-based authentication is currently supported because
+ * the Anthropic API does NOT provide conversation history retrieval.
+ * The official API is stateless and only supports message generation.
+ *
+ * For archiving Claude conversations, you must use cookie-based auth
+ * to access the claude.ai web platform APIs.
  */
 
 import { StrategyBasedProvider } from '../auth/base-strategy-provider.js';
@@ -17,7 +20,7 @@ import type {
 } from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError, NotFoundError } from '../../types/provider.js';
-import { AnthropicApiKeyStrategy, CookieApiStrategy } from '../auth/strategies.js';
+import { CookieApiStrategy } from '../auth/strategies.js';
 
 interface ClaudeProject {
   uuid: string;
@@ -28,55 +31,33 @@ interface ClaudeProject {
 }
 
 /**
- * Improved Claude Provider with API-first approach
+ * Claude Provider with strategy-based authentication
+ * Currently only supports cookie-based auth (the only method that works for archival)
  */
 export class ClaudeApiProvider extends StrategyBasedProvider {
   readonly name = 'claude' as const;
   readonly displayName = 'Claude';
-  readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['api-key', 'cookies'];
+  readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['cookies'];
 
   private organizationId?: string;
   private conversationProjects: Map<string, string> = new Map();
   private projects: Map<string, ClaudeProject> = new Map();
 
   protected registerAuthStrategies(): void {
-    // Priority 1: Try Anthropic API first (if API key provided)
-    this.strategyManager.register(new AnthropicApiKeyStrategy());
-
-    // Priority 2: Fall back to cookie-based web API
+    // Only cookie-based auth works for conversation archival
+    // Anthropic API does NOT support conversation history retrieval
     this.strategyManager.register(new CookieApiStrategy('.claude.ai', 'https://claude.ai'));
+
+    // API key strategy commented out until Anthropic adds conversation APIs
+    // this.strategyManager.register(new AnthropicApiKeyStrategy());
   }
 
   /**
-   * List conversations using the active auth strategy
+   * List conversations - uses cookie-based web API
    */
   async listConversations(options: ListConversationsOptions = {}): Promise<ConversationSummary[]> {
     this.requireAuth();
-
-    const strategy = this.getActiveStrategy();
-
-    if (strategy === 'api-key') {
-      return this.listConversationsViaApi(options);
-    } else {
-      return this.listConversationsViaWeb(options);
-    }
-  }
-
-  /**
-   * List conversations via Anthropic API
-   * Note: The official Anthropic API doesn't provide conversation history retrieval
-   * This is a limitation of the official API
-   */
-  private async listConversationsViaApi(
-    options: ListConversationsOptions = {}
-  ): Promise<ConversationSummary[]> {
-    // The Anthropic API doesn't support listing conversations
-    // This is a known limitation - the API is stateless
-    throw new Error(
-      'Listing conversations is not supported via Anthropic API. ' +
-        'The official API does not provide conversation history. ' +
-        'Please use cookie-based authentication to archive from claude.ai'
-    );
+    return this.listConversationsViaWeb(options);
   }
 
   /**
@@ -270,20 +251,10 @@ export class ClaudeApiProvider extends StrategyBasedProvider {
   }
 
   /**
-   * Fetch a full conversation
+   * Fetch a full conversation - uses cookie-based web API
    */
   async fetchConversation(id: string): Promise<Conversation> {
     this.requireAuth();
-
-    const strategy = this.getActiveStrategy();
-
-    if (strategy === 'api-key') {
-      throw new Error(
-        'Fetching conversations is not supported via Anthropic API. ' +
-          'Please use cookie-based authentication.'
-      );
-    }
-
     return this.fetchConversationViaWeb(id);
   }
 

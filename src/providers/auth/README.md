@@ -2,7 +2,9 @@
 
 ### Overview
 
-This module provides a pluggable authentication architecture for AI Vault providers. It enables providers to support multiple authentication methods with automatic fallback, making the system more robust and future-proof.
+This module provides a pluggable authentication architecture for AI Vault providers. It enables clean separation of authentication logic and makes it easy to add new auth methods in the future.
+
+**Current Reality**: Cookie-based authentication is the only method that works for conversation archival. This module provides the infrastructure for when other methods become available.
 
 ### Architecture
 
@@ -17,14 +19,14 @@ This module provides a pluggable authentication architecture for AI Vault provid
 │   └───────────────────────────────┘ │
 └─────────────────────────────────────┘
          │
-         ├─→ Priority 1: API Key Strategy
-         │   (Official APIs: Anthropic, OpenAI)
+         ├─→ Priority 1: Cookie + API Strategy ✅
+         │   (Web platforms - ONLY method that works)
          │
-         ├─→ Priority 2: Cookie + API Strategy
-         │   (Web platforms: claude.ai, chatgpt.com)
+         ├─→ Priority 5: OAuth Strategy 🔮
+         │   (Future)
          │
-         └─→ Priority 3: OAuth Strategy
-             (Future: OAuth 2.0 flows)
+         └─→ Priority 10: API Key Strategy 🔮
+             (Future - when providers add conversation APIs)
 ```
 
 ### Key Components
@@ -61,15 +63,13 @@ interface AuthContext {
 
 #### 3. Built-in Strategies
 
-**API Key Strategies:**
-- `AnthropicApiKeyStrategy` - For Anthropic API
-- `OpenAIApiKeyStrategy` - For OpenAI API
+**Active (Works Today):**
+- `CookieApiStrategy` - Cookie-based web auth (Priority 1)
 
-**Cookie Strategies:**
-- `CookieApiStrategy` - Cookie-based web auth
-
-**Future:**
-- `OAuthStrategy` - OAuth 2.0 flows (placeholder)
+**Future (Infrastructure Ready):**
+- `AnthropicApiKeyStrategy` - For when Anthropic adds conversation APIs (Priority 10)
+- `OpenAIApiKeyStrategy` - For when OpenAI adds conversation APIs (Priority 10)
+- `OAuthStrategy` - OAuth 2.0 flows (Priority 5, placeholder)
 
 ### Usage
 
@@ -82,25 +82,20 @@ import { AnthropicApiKeyStrategy, CookieApiStrategy } from '../auth/strategies.j
 export class MyProvider extends StrategyBasedProvider {
   readonly name = 'my-provider' as const;
   readonly displayName = 'My Provider';
-  readonly supportedAuthMethods = ['api-key', 'cookies'];
+  readonly supportedAuthMethods = ['cookies']; // Only what works today!
 
   protected registerAuthStrategies(): void {
-    // Register strategies in priority order
-    this.strategyManager.register(new AnthropicApiKeyStrategy());
+    // Register only what works
     this.strategyManager.register(new CookieApiStrategy('.example.com', 'https://example.com'));
+
+    // Future strategies commented out until they're actually useful
+    // this.strategyManager.register(new MyApiKeyStrategy());
   }
 
   async listConversations(options?) {
     this.requireAuth();
-
-    // Check which strategy is active
-    const strategy = this.getActiveStrategy();
-
-    if (strategy === 'api-key') {
-      return this.listViaApi(options);
-    } else {
-      return this.listViaWeb(options);
-    }
+    // Currently only cookie-based works, so implementation is simple
+    return this.listViaWeb(options);
   }
 
   // ... implement other methods
@@ -174,15 +169,23 @@ export class NewProvider extends StrategyBasedProvider {
 }
 ```
 
-### API Limitations
+### Current Limitations & Reality
 
-**Important Notes:**
+**What Works:**
+- ✅ Cookie-based authentication - Full conversation archival
 
-1. **Claude (Anthropic API)**: The official API doesn't support conversation history retrieval. Cookie-based auth is required to archive from claude.ai.
+**What Doesn't Work (Provider API Limitations):**
+- ❌ Anthropic API - No conversation history support
+- ❌ OpenAI API - No conversation history support
 
-2. **ChatGPT (OpenAI API)**: The official API is stateless and doesn't provide conversation history. Cookie-based auth is required to archive from chatgpt.com.
+**Why Include Infrastructure for Non-Working Methods?**
 
-3. **Recommended Approach**: For archival/backup use cases, always use cookie-based authentication to access the full conversation history from the web platforms.
+Future-proofing! When providers eventually add conversation APIs:
+1. Uncomment the strategy registration
+2. Implement the API methods
+3. Users get the new option automatically
+
+Until then, stick to cookie-based auth.
 
 ### Future Enhancements
 
