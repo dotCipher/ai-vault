@@ -8,7 +8,7 @@ import { getProvider } from '../../providers/index.js';
 import { Archiver } from '../../core/archiver.js';
 import { Storage, getDefaultStorageConfig } from '../../core/storage.js';
 import { MediaManager } from '../../core/media.js';
-import { createError } from '../middleware/error-handler.js';
+import { createError, isApiError } from '../middleware/error-handler.js';
 
 const router = Router();
 
@@ -115,7 +115,7 @@ router.post('/start', async (req: Request, res: Response) => {
       message: 'Archive operation started',
     });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to start archive', 500, error);
@@ -137,7 +137,7 @@ router.get('/operation/:id', async (req: Request, res: Response) => {
 
     res.json({ id, ...operation });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to get operation status', 500, error);

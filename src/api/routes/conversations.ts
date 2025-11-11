@@ -3,9 +3,9 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { Storage, getDefaultStorageConfig } from '../../core/storage.js';
+import { getDefaultStorageConfig } from '../../core/storage.js';
 import { loadConfig } from '../../utils/config.js';
-import { createError } from '../middleware/error-handler.js';
+import { createError, isApiError } from '../middleware/error-handler.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
@@ -38,9 +38,7 @@ router.get('/', async (req: Request, res: Response) => {
     const allConversations: any[] = [];
 
     // Determine which providers to query
-    const providers = provider
-      ? [provider as string]
-      : Object.keys(config.providers || {});
+    const providers = provider ? [provider as string] : Object.keys(config.providers || {});
 
     for (const providerName of providers) {
       const providerPath = path.join(storageConfig.baseDir, providerName);
@@ -164,7 +162,7 @@ router.get('/:provider/:id', async (req: Request, res: Response) => {
       metadata: entry,
     });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to get conversation', 500, error);

@@ -5,7 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import { loadConfig } from '../../utils/config.js';
 import { getProvider } from '../../providers/index.js';
-import { createError } from '../middleware/error-handler.js';
+import { createError, isApiError } from '../middleware/error-handler.js';
 
 const router = Router();
 
@@ -43,7 +43,7 @@ router.get('/:provider/status', async (req: Request, res: Response) => {
       throw createError(`Provider ${providerName} not configured`, 404);
     }
 
-    const provider = getProvider(providerName as any);
+    const provider = getProvider(providerName as 'chatgpt' | 'grok-web' | 'grok-x' | 'claude');
     if (!provider) {
       throw createError(`Provider ${providerName} not found`, 404);
     }
@@ -68,7 +68,7 @@ router.get('/:provider/status', async (req: Request, res: Response) => {
       rateLimit: provider.rateLimit,
     });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to get provider status', 500, error);
@@ -89,7 +89,7 @@ router.post('/:provider/test', async (req: Request, res: Response) => {
       throw createError(`Provider ${providerName} not configured`, 404);
     }
 
-    const provider = getProvider(providerName as any);
+    const provider = getProvider(providerName as 'chatgpt' | 'grok-web' | 'grok-x' | 'claude');
     if (!provider) {
       throw createError(`Provider ${providerName} not found`, 404);
     }
@@ -111,7 +111,7 @@ router.post('/:provider/test', async (req: Request, res: Response) => {
       conversationsAccessible: conversations.length > 0,
     });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Provider test failed', 500, error);

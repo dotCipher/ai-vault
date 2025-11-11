@@ -4,7 +4,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { ScheduleManager } from '../../utils/schedule-manager.js';
-import { createError } from '../middleware/error-handler.js';
+import { createError, isApiError } from '../middleware/error-handler.js';
 import type { ScheduleArchiveOptions } from '../../types/schedule.js';
 
 const router = Router();
@@ -50,7 +50,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     res.json({ success: true, schedule: newSchedule });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to create schedule', 500, error);
@@ -70,7 +70,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, schedule });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to update schedule', 500, error);
@@ -89,7 +89,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, message: 'Schedule deleted' });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to delete schedule', 500, error);
@@ -108,7 +108,7 @@ router.post('/:id/enable', async (req: Request, res: Response) => {
 
     res.json({ success: true, schedule });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to enable schedule', 500, error);
@@ -127,7 +127,7 @@ router.post('/:id/disable', async (req: Request, res: Response) => {
 
     res.json({ success: true, schedule });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to disable schedule', 500, error);

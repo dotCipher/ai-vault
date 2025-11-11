@@ -7,7 +7,7 @@ import chalk from 'chalk';
 
 export interface ApiError extends Error {
   statusCode?: number;
-  details?: any;
+  details?: unknown;
 }
 
 export function errorHandler(
@@ -33,9 +33,17 @@ export function errorHandler(
   });
 }
 
-export function createError(message: string, statusCode: number = 500, details?: any): ApiError {
+export function createError(
+  message: string,
+  statusCode: number = 500,
+  details?: unknown
+): ApiError {
   const error: ApiError = new Error(message);
   error.statusCode = statusCode;
   error.details = details;
   return error;
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return typeof error === 'object' && error !== null && 'statusCode' in error;
 }
