@@ -120,3 +120,51 @@ jobs:
           name: dist
           path: dist/
           retention-days: 7
+
+  verify-package:
+    name: Verify Package
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Run smoke tests
+        run: pnpm run smoke-test
+
+      - name: Verify package contents
+        run: pnpm run verify:package
+
+      - name: Test package installation
+        run: |
+          # Create a test package
+          npm pack
+
+          # Create temp directory for testing
+          mkdir -p /tmp/ai-vault-test
+          cd /tmp/ai-vault-test
+
+          # Extract and test
+          tar -xzf $GITHUB_WORKSPACE/ai-vault-*.tgz
+
+          # Verify critical files exist
+          test -f package/dist/cli.js || (echo "ERROR: cli.js missing" && exit 1)
+          test -f package/ui/dist/index.html || (echo "ERROR: UI index.html missing" && exit 1)
+
+          echo "✅ Package installation test passed"

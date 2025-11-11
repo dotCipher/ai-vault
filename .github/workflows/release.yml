@@ -39,6 +39,9 @@ jobs:
       - name: Build project
         run: pnpm run build
 
+      - name: Verify package contents
+        run: pnpm run verify:package
+
       - name: Get version before release
         id: version_before
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
