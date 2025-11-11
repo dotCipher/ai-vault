@@ -1,3 +1,13 @@
+# [2.1.0](https://github.com/dotCipher/ai-vault/compare/v2.0.1...v2.1.0) (2025-11-11)
+
+### Bug Fixes
+
+- **scheduler:** use full executable path in cron jobs ([42794d9](https://github.com/dotCipher/ai-vault/commit/42794d99ab8f11f68fe0334f309e5f05bbb07726))
+
+### Features
+
+- implement schedule status tracking for backup runs ([d31bbb6](https://github.com/dotCipher/ai-vault/commit/d31bbb67779ffb8b3ced439f4f0a914e1f21363c))
+
 ## [2.0.1](https://github.com/dotCipher/ai-vault/compare/v2.0.0...v2.0.1) (2025-11-09)
 
 ### Bug Fixes
