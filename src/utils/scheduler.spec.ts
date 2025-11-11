@@ -117,7 +117,7 @@ describe('Scheduler', () => {
 
       // Should include full path, not just "ai-vault"
       expect(command).toContain('/opt/homebrew/bin/ai-vault');
-      expect(command).toContain('archive');
+      expect(command).toContain('backup');
       expect(command).toContain('--provider "grok-web"');
     });
 
@@ -200,7 +200,7 @@ describe('Scheduler', () => {
 
       expect(echoCall).toBeDefined();
       expect(echoCall![0]).toContain('/opt/homebrew/bin/ai-vault');
-      expect(echoCall![0]).toContain('archive');
+      expect(echoCall![0]).toContain('backup');
     });
   });
 });
