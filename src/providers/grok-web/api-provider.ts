@@ -15,19 +15,8 @@
  */
 
 import { StrategyBasedProvider } from '../auth/base-strategy-provider.js';
-import type {
-  ProviderConfig,
-  Conversation,
-  ConversationHierarchy,
-  Message,
-  Attachment,
-  Asset,
-  Workspace,
-  Project,
-  ProjectFile,
-} from '../../types/index.js';
+import type { Conversation, Message, Attachment } from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
-import { AuthenticationError, NotFoundError } from '../../types/provider.js';
 import { CookieApiStrategy } from '../auth/strategies.js';
 import { autoScroll } from '../../utils/scraper.js';
 

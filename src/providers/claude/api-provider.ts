@@ -12,14 +12,9 @@
  */
 
 import { StrategyBasedProvider } from '../auth/base-strategy-provider.js';
-import type {
-  ProviderConfig,
-  Conversation,
-  Message,
-  ConversationHierarchy,
-} from '../../types/index.js';
+import type { Conversation, Message, ConversationHierarchy } from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
-import { AuthenticationError, NotFoundError } from '../../types/provider.js';
+import { AuthenticationError } from '../../types/provider.js';
 import { CookieApiStrategy } from '../auth/strategies.js';
 
 interface ClaudeProject {

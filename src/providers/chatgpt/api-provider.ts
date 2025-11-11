@@ -12,14 +12,8 @@
  */
 
 import { StrategyBasedProvider } from '../auth/base-strategy-provider.js';
-import type {
-  ProviderConfig,
-  Conversation,
-  Message,
-  ConversationHierarchy,
-} from '../../types/index.js';
+import type { Conversation, Message, ConversationHierarchy } from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
-import { AuthenticationError } from '../../types/provider.js';
 import { CookieApiStrategy } from '../auth/strategies.js';
 import { saveProviderConfig } from '../../utils/config.js';
 
@@ -37,9 +31,7 @@ export class ChatGPTApiProvider extends StrategyBasedProvider {
   protected registerAuthStrategies(): void {
     // Only cookie-based auth works for conversation archival
     // OpenAI API does NOT support conversation history retrieval
-    this.strategyManager.register(
-      new CookieApiStrategy('.chatgpt.com', 'https://chatgpt.com')
-    );
+    this.strategyManager.register(new CookieApiStrategy('.chatgpt.com', 'https://chatgpt.com'));
 
     // API key strategy commented out until OpenAI adds conversation APIs
     // this.strategyManager.register(new OpenAIApiKeyStrategy());
