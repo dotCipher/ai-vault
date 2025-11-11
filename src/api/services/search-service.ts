@@ -8,7 +8,6 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
-import type { VaultConfig as Config } from '../../types/index.js';
 import { getDefaultStorageConfig } from '../../core/storage.js';
 
 export interface SearchResult {
@@ -68,8 +67,8 @@ export class SearchService {
     this.index.clear();
     this.invertedIndex.clear();
 
-    const storageConfig = getDefaultStorageConfig(); if (archiveDir) storageConfig.baseDir = archiveDir;
-    
+    const storageConfig = getDefaultStorageConfig();
+    if (archiveDir) storageConfig.baseDir = archiveDir;
 
     let totalDocs = 0;
 
@@ -100,26 +99,27 @@ export class SearchService {
           const conversation = JSON.parse(conversationData);
 
           // Extract text content from all messages
-          const content = conversation.messages
-            ?.map((msg: any) => {
-              const parts = [];
-              if (msg.content) {
-                if (typeof msg.content === 'string') {
-                  parts.push(msg.content);
-                } else if (Array.isArray(msg.content)) {
-                  for (const part of msg.content) {
-                    if (typeof part === 'string') {
-                      parts.push(part);
-                    } else if (part.text) {
-                      parts.push(part.text);
+          const content =
+            conversation.messages
+              ?.map((msg: any) => {
+                const parts = [];
+                if (msg.content) {
+                  if (typeof msg.content === 'string') {
+                    parts.push(msg.content);
+                  } else if (Array.isArray(msg.content)) {
+                    for (const part of msg.content) {
+                      if (typeof part === 'string') {
+                        parts.push(part);
+                      } else if (part.text) {
+                        parts.push(part.text);
+                      }
                     }
                   }
                 }
-              }
-              return parts.join(' ');
-            })
-            .join('\n')
-            .toLowerCase() || '';
+                return parts.join(' ');
+              })
+              .join('\n')
+              .toLowerCase() || '';
 
           const doc: IndexedDocument = {
             id: conversationId,

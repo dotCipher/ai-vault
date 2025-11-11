@@ -5,7 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import { loadConfig } from '../../utils/config.js';
 import { getDefaultStorageConfig } from '../../core/storage.js';
-import { createError } from '../middleware/error-handler.js';
+import { createError, isApiError } from '../middleware/error-handler.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
@@ -29,9 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
     const mediaFiles: any[] = [];
 
     // Determine which providers to query
-    const providers = provider
-      ? [provider as string]
-      : Object.keys(config.providers || {});
+    const providers = provider ? [provider as string] : Object.keys(config.providers || {});
 
     for (const providerName of providers) {
       const mediaRegistryPath = path.join(
@@ -101,11 +99,7 @@ router.get('/:provider/:hash', async (req: Request, res: Response) => {
       storageConfig.baseDir = config.settings.archiveDir;
     }
 
-    const mediaRegistryPath = path.join(
-      storageConfig.baseDir,
-      provider,
-      'media-registry.json'
-    );
+    const mediaRegistryPath = path.join(storageConfig.baseDir, provider, 'media-registry.json');
 
     if (!existsSync(mediaRegistryPath)) {
       throw createError('Media registry not found', 404);
@@ -127,7 +121,7 @@ router.get('/:provider/:hash', async (req: Request, res: Response) => {
     // Send file
     res.sendFile(filePath);
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Failed to get media file', 500, error);
@@ -156,11 +150,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
     const providers = Object.keys(config.providers || {});
 
     for (const provider of providers) {
-      const mediaRegistryPath = path.join(
-        storageConfig.baseDir,
-        provider,
-        'media-registry.json'
-      );
+      const mediaRegistryPath = path.join(storageConfig.baseDir, provider, 'media-registry.json');
 
       if (!existsSync(mediaRegistryPath)) {
         continue;

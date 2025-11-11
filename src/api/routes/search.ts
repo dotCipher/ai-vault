@@ -5,7 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import { getSearchService } from '../services/search-service.js';
 import { loadConfig } from '../../utils/config.js';
-import { createError } from '../middleware/error-handler.js';
+import { createError, isApiError } from '../middleware/error-handler.js';
 
 const router = Router();
 
@@ -18,7 +18,10 @@ router.post('/index', async (_req: Request, res: Response) => {
     const config = await loadConfig();
     const searchService = getSearchService();
 
-    await searchService.buildIndex(Object.keys(config.providers || {}), config.settings?.archiveDir);
+    await searchService.buildIndex(
+      Object.keys(config.providers || {}),
+      config.settings?.archiveDir
+    );
 
     const stats = searchService.getStats();
 
@@ -49,7 +52,10 @@ router.post('/query', async (req: Request, res: Response) => {
     // Build index if not already built
     if (!searchService.getStats().isIndexed) {
       const config = await loadConfig();
-      await searchService.buildIndex(Object.keys(config.providers || {}), config.settings?.archiveDir);
+      await searchService.buildIndex(
+        Object.keys(config.providers || {}),
+        config.settings?.archiveDir
+      );
     }
 
     const results = await searchService.search({
@@ -67,7 +73,7 @@ router.post('/query', async (req: Request, res: Response) => {
       query,
     });
   } catch (error) {
-    if ((error as any).statusCode) {
+    if (isApiError(error)) {
       throw error;
     }
     throw createError('Search failed', 500, error);
@@ -92,7 +98,10 @@ router.get('/suggestions', async (req: Request, res: Response) => {
     // Build index if not already built
     if (!searchService.getStats().isIndexed) {
       const config = await loadConfig();
-      await searchService.buildIndex(Object.keys(config.providers || {}), config.settings?.archiveDir);
+      await searchService.buildIndex(
+        Object.keys(config.providers || {}),
+        config.settings?.archiveDir
+      );
     }
 
     const suggestions = searchService.getSuggestions(q, parseInt(limit as string));
