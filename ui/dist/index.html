@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Vault - Your AI Conversation Archive</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar">
+      <div class="nav-container">
+        <div class="nav-brand">
+          <h1>🏛️ AI Vault</h1>
+        </div>
+        <div class="nav-links">
+          <a href="#" data-page="dashboard" class="nav-link active">Dashboard</a>
+          <a href="#" data-page="conversations" class="nav-link">Conversations</a>
+          <a href="#" data-page="search" class="nav-link">Search</a>
+          <a href="#" data-page="media" class="nav-link">Media</a>
+          <a href="#" data-page="schedules" class="nav-link">Schedules</a>
+          <a href="#" data-page="settings" class="nav-link">Settings</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+      <!-- Dashboard Page -->
+      <div id="dashboard-page" class="page active">
+        <h2>Dashboard</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Conversations</div>
+            <div class="stat-value" id="total-conversations">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Messages</div>
+            <div class="stat-value" id="total-messages">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Media Files</div>
+            <div class="stat-value" id="total-media">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Providers</div>
+            <div class="stat-value" id="total-providers">-</div>
+          </div>
+        </div>
+
+        <h3>Providers</h3>
+        <div id="providers-list" class="providers-grid"></div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary" onclick="app.triggerArchive()">Archive Now</button>
+          <button class="btn btn-secondary" onclick="app.rebuildSearchIndex()">Rebuild Search Index</button>
+        </div>
+      </div>
+
+      <!-- Conversations Page -->
+      <div id="conversations-page" class="page">
+        <h2>Conversations</h2>
+        <div class="filters">
+          <select id="provider-filter" class="filter-select">
+            <option value="">All Providers</option>
+          </select>
+          <select id="sort-filter" class="filter-select">
+            <option value="updatedAt-desc">Latest First</option>
+            <option value="updatedAt-asc">Oldest First</option>
+            <option value="title-asc">Title A-Z</option>
+          </select>
+          <input type="number" id="limit-filter" placeholder="Limit" value="50" class="filter-input" />
+        </div>
+        <div id="conversations-list" class="conversations-list"></div>
+        <div class="pagination">
+          <button class="btn" onclick="app.prevPage()" id="prev-btn">Previous</button>
+          <span id="page-info"></span>
+          <button class="btn" onclick="app.nextPage()" id="next-btn">Next</button>
+        </div>
+      </div>
+
+      <!-- Search Page -->
+      <div id="search-page" class="page">
+        <h2>Search Conversations</h2>
+        <div class="search-box">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Search across all conversations..."
+            class="search-input"
+          />
+          <button class="btn btn-primary" onclick="app.performSearch()">Search</button>
+        </div>
+        <div id="search-results" class="search-results"></div>
+      </div>
+
+      <!-- Media Page -->
+      <div id="media-page" class="page">
+        <h2>Media Gallery</h2>
+        <div class="filters">
+          <select id="media-provider-filter" class="filter-select">
+            <option value="">All Providers</option>
+          </select>
+          <select id="media-type-filter" class="filter-select">
+            <option value="">All Types</option>
+            <option value="image">Images</option>
+            <option value="video">Videos</option>
+            <option value="document">Documents</option>
+          </select>
+        </div>
+        <div id="media-stats" class="stats-grid"></div>
+        <div id="media-list" class="media-grid"></div>
+      </div>
+
+      <!-- Schedules Page -->
+      <div id="schedules-page" class="page">
+        <h2>Backup Schedules</h2>
+        <button class="btn btn-primary" onclick="app.showAddScheduleForm()">Add Schedule</button>
+        <div id="schedules-list" class="schedules-list"></div>
+      </div>
+
+      <!-- Settings Page -->
+      <div id="settings-page" class="page">
+        <h2>Settings</h2>
+        <div class="settings-section">
+          <h3>System Information</h3>
+          <div id="system-info"></div>
+        </div>
+        <div class="settings-section">
+          <h3>Archive Directory</h3>
+          <input type="text" id="archive-dir" class="input-full" />
+          <button class="btn btn-primary" onclick="app.saveSettings()">Save Settings</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading...</div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
