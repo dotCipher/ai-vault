@@ -99,6 +99,8 @@ abstract class StrategyBasedProvider implements Provider {
 - `src/providers/auth/base-strategy-provider.ts` - Base class with strategy support
 - `src/providers/claude/api-provider.ts` - Claude with strategy architecture
 - `src/providers/chatgpt/api-provider.ts` - ChatGPT with strategy architecture
+- `src/providers/grok-web/api-provider.ts` - Grok Web with strategy architecture
+- `src/providers/grok-x/api-provider.ts` - Grok X with strategy architecture
 
 **Current Implementation:**
 ```typescript
@@ -142,6 +144,11 @@ export class ClaudeApiProvider extends StrategyBasedProvider {
 - Does NOT support conversation retrieval
 - Does NOT support ChatGPT history
 - Only supports: Chat completions, fine-tuning
+
+❌ **Grok (X)**:
+- No official API available
+- Cookie-based web scraping only
+- X-integrated platform uses x.com endpoints
 
 ### Why Include API Key Infrastructure?
 
@@ -256,6 +263,12 @@ src/providers/
 │   ├── index.ts                   # Original (unchanged for compatibility)
 │   └── api-provider.ts            # NEW: Strategy-based implementation
 ├── chatgpt/
+│   ├── index.ts                   # Original (unchanged)
+│   └── api-provider.ts            # NEW: Strategy-based implementation
+├── grok-web/
+│   ├── index.ts                   # Original (unchanged)
+│   └── api-provider.ts            # NEW: Strategy-based implementation
+├── grok-x/
 │   ├── index.ts                   # Original (unchanged)
 │   └── api-provider.ts            # NEW: Strategy-based implementation
 └── base.ts                        # Original base class (unchanged)
