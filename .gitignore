@@ -5,6 +5,7 @@ yarn.lock
 
 # Build output
 dist/
+!ui/dist/
 *.tsbuildinfo
 
 # Environment

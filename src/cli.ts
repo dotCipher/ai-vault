@@ -144,6 +144,20 @@ program
   });
 
 program
+  .command('ui')
+  .description('Start the web UI and local API server')
+  .option('-p, --port <port>', 'Port to run the server on', '3141')
+  .option('--host <host>', 'Host to bind the server to', '127.0.0.1')
+  .option('--api-key <key>', 'API key for authentication (optional)')
+  .option('--no-ui', 'Start API server only, without serving the web UI')
+  .option('--no-cors', 'Disable CORS')
+  .action(async (_options) => {
+    const { createUICommand } = await import('./commands/ui.js');
+    const uiCommand = createUICommand();
+    await uiCommand.parseAsync(['ui', ...process.argv.slice(3)], { from: 'user' });
+  });
+
+program
   .command('upgrade')
   .alias('update')
   .description('Check for and install the latest version')
