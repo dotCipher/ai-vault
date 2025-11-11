@@ -12,7 +12,9 @@ import axios, { AxiosInstance } from 'axios';
 
 /**
  * Base interface for all authentication strategies
+ * Used by: ApiKeyAuthStrategy, CookieApiStrategy, OAuthStrategy
  */
+
 export interface AuthStrategy {
   readonly name: string;
   readonly priority: number; // Lower = higher priority (try first)
@@ -73,8 +75,8 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
   readonly priority = 10; // Low priority - not currently useful for archival
 
   constructor(
-    private baseURL: string,
-    private headerName: string = 'x-api-key'
+    protected baseURL: string,
+    protected headerName: string = 'x-api-key'
   ) {}
 
   canAuthenticate(config: ProviderConfig): boolean {
@@ -122,7 +124,7 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
   /**
    * Validate API key - override in subclasses for provider-specific validation
    */
-  protected async validateApiKey(client: AxiosInstance): Promise<void> {
+  protected async validateApiKey(_client: AxiosInstance): Promise<void> {
     // Default: just check if client exists
     // Subclasses should make an actual validation request
   }
@@ -241,7 +243,7 @@ export class CookieApiStrategy implements AuthStrategy {
     // Navigate to establish session
     await page.goto(this.baseURL, {
       waitUntil: 'domcontentloaded',
-      timeout: 30000
+      timeout: 30000,
     });
 
     return {
@@ -266,7 +268,7 @@ export class CookieApiStrategy implements AuthStrategy {
 
       await page.goto(context.metadata?.baseURL, {
         waitUntil: 'domcontentloaded',
-        timeout: 15000
+        timeout: 15000,
       });
 
       const url = page.url();
@@ -297,11 +299,11 @@ export class OAuthStrategy implements AuthStrategy {
     return config.authMethod === 'oauth';
   }
 
-  async authenticate(config: ProviderConfig): Promise<AuthContext> {
+  async authenticate(_config: ProviderConfig): Promise<AuthContext> {
     throw new Error('OAuth authentication not yet implemented');
   }
 
-  async isValid(context: AuthContext): Promise<boolean> {
+  async isValid(_context: AuthContext): Promise<boolean> {
     return false;
   }
 }
@@ -362,7 +364,7 @@ export class AuthStrategyManager {
    * Cleanup authentication context
    */
   async cleanup(context: AuthContext): Promise<void> {
-    const strategy = this.strategies.find(s => s.name === context.strategy);
+    const strategy = this.strategies.find((s) => s.name === context.strategy);
     if (strategy?.cleanup) {
       await strategy.cleanup(context);
     }

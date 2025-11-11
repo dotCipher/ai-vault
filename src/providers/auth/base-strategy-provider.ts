@@ -13,7 +13,7 @@ import type {
   MediaDownloadResult,
 } from '../../types/provider.js';
 import type { ProviderName, ProviderConfig, Conversation } from '../../types/index.js';
-import type { AuthStrategy, AuthContext } from './strategies.js';
+import type { AuthContext } from './strategies.js';
 import { AuthStrategyManager } from './strategies.js';
 import { AuthenticationError } from '../../types/provider.js';
 import fs from 'fs/promises';
@@ -71,7 +71,7 @@ export abstract class StrategyBasedProvider implements Provider {
     }
 
     const strategy = this.strategyManager['strategies'].find(
-      s => s.name === this.authContext!.strategy
+      (s) => s.name === this.authContext!.strategy
     );
 
     if (!strategy) {
