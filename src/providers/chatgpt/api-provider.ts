@@ -1,12 +1,14 @@
 /**
- * ChatGPT Provider - API-First Implementation
+ * ChatGPT Provider - Strategy-Based Implementation
  *
- * This is an improved implementation that supports both:
- * 1. OpenAI API (preferred) - using official API keys
- * 2. ChatGPT web platform (fallback) - using cookie-based auth
+ * Uses pluggable authentication architecture with cookie-based auth.
  *
- * Note: The OpenAI API doesn't provide conversation history retrieval.
- * For archiving existing conversations, cookie-based auth is required.
+ * NOTE: Only cookie-based authentication is currently supported because
+ * the OpenAI API does NOT provide conversation history retrieval.
+ * The official API is stateless and only supports chat completions.
+ *
+ * For archiving ChatGPT conversations, you must use cookie-based auth
+ * to access the chatgpt.com web platform APIs.
  */
 
 import { StrategyBasedProvider } from '../auth/base-strategy-provider.js';
@@ -18,27 +20,29 @@ import type {
 } from '../../types/index.js';
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError } from '../../types/provider.js';
-import { OpenAIApiKeyStrategy, CookieApiStrategy } from '../auth/strategies.js';
+import { CookieApiStrategy } from '../auth/strategies.js';
 import { saveProviderConfig } from '../../utils/config.js';
 
 /**
- * Improved ChatGPT Provider with API-first approach
+ * ChatGPT Provider with strategy-based authentication
+ * Currently only supports cookie-based auth (the only method that works for archival)
  */
 export class ChatGPTApiProvider extends StrategyBasedProvider {
   readonly name = 'chatgpt' as const;
   readonly displayName = 'ChatGPT';
-  readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['api-key', 'cookies'];
+  readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['cookies'];
 
   private conversationProjects: Map<string, string> = new Map();
 
   protected registerAuthStrategies(): void {
-    // Priority 1: Try OpenAI API first (if API key provided)
-    this.strategyManager.register(new OpenAIApiKeyStrategy());
-
-    // Priority 2: Fall back to cookie-based web API
+    // Only cookie-based auth works for conversation archival
+    // OpenAI API does NOT support conversation history retrieval
     this.strategyManager.register(
       new CookieApiStrategy('.chatgpt.com', 'https://chatgpt.com')
     );
+
+    // API key strategy commented out until OpenAI adds conversation APIs
+    // this.strategyManager.register(new OpenAIApiKeyStrategy());
   }
 
   /**
@@ -100,21 +104,10 @@ export class ChatGPTApiProvider extends StrategyBasedProvider {
   }
 
   /**
-   * List conversations using the active auth strategy
+   * List conversations - uses cookie-based web API
    */
   async listConversations(options: ListConversationsOptions = {}): Promise<ConversationSummary[]> {
     this.requireAuth();
-
-    const strategy = this.getActiveStrategy();
-
-    if (strategy === 'api-key') {
-      throw new Error(
-        'Listing conversations is not supported via OpenAI API. ' +
-          'The official API does not provide conversation history. ' +
-          'Please use cookie-based authentication to archive from chatgpt.com'
-      );
-    }
-
     return this.listConversationsViaWeb(options);
   }
 
@@ -312,20 +305,10 @@ export class ChatGPTApiProvider extends StrategyBasedProvider {
   }
 
   /**
-   * Fetch a full conversation
+   * Fetch a full conversation - uses cookie-based web API
    */
   async fetchConversation(id: string): Promise<Conversation> {
     this.requireAuth();
-
-    const strategy = this.getActiveStrategy();
-
-    if (strategy === 'api-key') {
-      throw new Error(
-        'Fetching conversations is not supported via OpenAI API. ' +
-          'Please use cookie-based authentication.'
-      );
-    }
-
     return this.fetchConversationViaWeb(id);
   }
 

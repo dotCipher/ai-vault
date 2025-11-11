@@ -64,10 +64,13 @@ export interface AuthContext {
 /**
  * API Key Authentication Strategy
  * Uses official provider APIs with API keys
+ *
+ * NOTE: Currently NOT used for most providers as official APIs don't support
+ * conversation history retrieval. This is included for future-proofing.
  */
 export class ApiKeyAuthStrategy implements AuthStrategy {
   readonly name = 'api-key';
-  readonly priority = 1; // Highest priority
+  readonly priority = 10; // Low priority - not currently useful for archival
 
   constructor(
     private baseURL: string,
@@ -203,12 +206,13 @@ export class OpenAIApiKeyStrategy extends ApiKeyAuthStrategy {
 
 /**
  * Cookie + API Strategy
- * Uses cookies for web session, then extracts API access from the session
- * This is the current approach used by ChatGPT and Claude providers
+ * Uses cookies for web session, then accesses backend APIs
+ * This is the PRIMARY approach for ChatGPT and Claude providers
+ * as it's the only way to access conversation history.
  */
 export class CookieApiStrategy implements AuthStrategy {
   readonly name = 'cookie-api';
-  readonly priority = 2; // Try after API key
+  readonly priority = 1; // Highest priority - this is what works!
 
   constructor(
     private domain: string,
@@ -287,7 +291,7 @@ export class CookieApiStrategy implements AuthStrategy {
  */
 export class OAuthStrategy implements AuthStrategy {
   readonly name = 'oauth';
-  readonly priority = 2;
+  readonly priority = 5;
 
   canAuthenticate(config: ProviderConfig): boolean {
     return config.authMethod === 'oauth';
