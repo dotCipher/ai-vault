@@ -52,6 +52,7 @@ program
   .option('--skip-media', 'Skip downloading media files (images, videos)')
   .option('--ids <ids...>', 'Specific conversation IDs to backup')
   .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--schedule-id <id>', 'Internal: schedule ID for tracking (used by scheduler)')
   .action(async (options) => {
     // Show deprecation warning if using 'archive' alias
     const command = program.args[0];
@@ -73,6 +74,7 @@ program
       skipMedia: options.skipMedia,
       conversationIds: options.ids,
       yes: options.yes,
+      scheduleId: options.scheduleId,
     });
   });
 
