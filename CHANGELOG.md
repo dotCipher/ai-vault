@@ -1,3 +1,22 @@
+# [3.0.0](https://github.com/dotCipher/ai-vault/compare/v2.1.0...v3.0.0) (2025-11-11)
+
+### Bug Fixes
+
+- **auth:** clarify cookie-only reality, prioritize user experience ([627960d](https://github.com/dotCipher/ai-vault/commit/627960d610c2acbd37a5c1b5c0f3cb86ca2c6dbe))
+- **lint:** resolve all ESLint errors in auth providers ([fc75dfc](https://github.com/dotCipher/ai-vault/commit/fc75dfc67def3fdaa08499b0c69208e50d4beee3))
+- resolve TypeScript and ESLint errors in API code ([c8246e8](https://github.com/dotCipher/ai-vault/commit/c8246e86a783877d7af109e4e34a1c3f86dd0482))
+- **tests:** update scheduler tests to expect 'backup' command ([ab45f21](https://github.com/dotCipher/ai-vault/commit/ab45f214c0a51c652d62c65a8815a7260f3041e1))
+
+### Features
+
+- add web UI and local API server with full-text search ([2a29d54](https://github.com/dotCipher/ai-vault/commit/2a29d549803fa6e569a307e2898613ef86d5ecf2))
+- **auth:** add strategy-based Grok providers for consistency ([554c232](https://github.com/dotCipher/ai-vault/commit/554c232071172e2d039e88e40a8a6fdcece62172))
+- **auth:** implement pluggable authentication strategy system ([a4327c8](https://github.com/dotCipher/ai-vault/commit/a4327c81d394bee17eabfd91d2bbee10db4d9f3d))
+
+### BREAKING CHANGES
+
+- **auth:** None - fully backward compatible
+
 # [2.1.0](https://github.com/dotCipher/ai-vault/compare/v2.0.1...v2.1.0) (2025-11-11)
 
 ### Bug Fixes
