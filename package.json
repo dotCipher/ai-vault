@@ -9,6 +9,7 @@
   },
   "files": [
     "dist/**/*",
+    "ui/dist/**/*",
     "README.md",
     "LICENSE"
   ],
@@ -35,7 +36,10 @@
     "test:coverage": "vitest run --coverage",
     "prepare": "husky",
     "postinstall": "playwright install chromium --with-deps || echo 'Note: Run pnpm exec playwright install chromium if browser installation failed'",
-    "prepublishOnly": "pnpm run build",
+    "verify:package": "./scripts/verify-package.sh",
+    "verify:build": "./scripts/verify-build.sh",
+    "smoke-test": "./scripts/smoke-test.sh",
+    "prepublishOnly": "pnpm run build && pnpm run verify:package",
     "release": "semantic-release"
   },
   "keywords": [
