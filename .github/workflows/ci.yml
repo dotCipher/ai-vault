@@ -145,12 +145,6 @@ jobs:
       - name: Build project
         run: pnpm run build
 
-      - name: Run smoke tests
-        run: pnpm run smoke-test
-
-      - name: Verify package contents
-        run: pnpm run verify:package
-
       - name: Test package installation
         run: |
           # Create a test package

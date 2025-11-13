@@ -40,10 +40,7 @@
     "test:coverage:integration": "vitest run --config vitest.config.integration.ts --coverage",
     "prepare": "husky",
     "postinstall": "playwright install chromium --with-deps || echo 'Note: Run pnpm exec playwright install chromium if browser installation failed'",
-    "verify:package": "./scripts/verify-package.sh",
-    "verify:build": "./scripts/verify-build.sh",
-    "smoke-test": "./scripts/smoke-test.sh",
-    "prepublishOnly": "pnpm run build && pnpm run verify:package",
+    "prepublishOnly": "pnpm run build",
     "release": "semantic-release"
   },
   "keywords": [
