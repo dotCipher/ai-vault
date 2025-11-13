@@ -1,13 +1,10 @@
 name: Integration Tests
 
 # This workflow runs slower integration tests
-# Trigger manually when needed, not on every PR
+# Trigger manually when needed (e.g., before releases)
 
 on:
-  workflow_dispatch: # Manual trigger
-  schedule:
-    # Run nightly at 2 AM UTC
-    - cron: '0 2 * * *'
+  workflow_dispatch: # Manual trigger only
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
