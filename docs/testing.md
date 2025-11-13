@@ -21,12 +21,12 @@ We use two types of tests:
 - Testing API route handlers
 - Testing with mocked dependencies
 
-### 2. **Integration Tests** (Slower, Manual/Scheduled)
+### 2. **Integration Tests** (Slower, Manual Only)
 
 - **Location**: `tests/integration/`
 - **Purpose**: Test the actual CLI as users would run it
 - **Speed**: 🐢 Slower (seconds to minutes)
-- **Run on**: Manual trigger, nightly, or before releases
+- **Run on**: Manual trigger (recommended before releases)
 - **Framework**: Vitest + execa (spawns real processes)
 
 **Examples:**
@@ -105,13 +105,13 @@ The standard CI pipeline runs:
 - ✅ Build verification
 - ✅ Package validation
 
-### Integration Tests (Manual/Scheduled)
+### Integration Tests (Manual Only)
 
 Integration tests run:
 
-- 📅 **Nightly** at 2 AM UTC (scheduled)
 - 🔘 **Manual trigger** via GitHub Actions
-- 🎯 **Before major releases** (manually triggered)
+- 🎯 **Before major releases** (recommended)
+- 🧪 **When adding new features** (optional but recommended)
 
 #### Triggering Integration Tests Manually
 
