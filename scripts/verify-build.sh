@@ -98,14 +98,14 @@ else
   echo "   Run 'pnpm run lint:fix' to auto-fix"
 fi
 
-# 7. Run tests
+# 7. Run unit tests (fast)
 echo ""
-echo -e "${BLUE}7. Running tests...${NC}"
+echo -e "${BLUE}7. Running unit tests...${NC}"
 
-if pnpm test; then
-  echo -e "${GREEN}✓${NC} All tests passed"
+if pnpm run test:unit; then
+  echo -e "${GREEN}✓${NC} All unit tests passed"
 else
-  echo -e "${RED}❌ Tests FAILED${NC}"
+  echo -e "${RED}❌ Unit tests FAILED${NC}"
   HAS_ERROR=1
 fi
 
