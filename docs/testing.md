@@ -323,8 +323,7 @@ const port = 3000 + Math.floor(Math.random() * 1000);
 - `pnpm test:all` - Run both unit and integration tests
 - `pnpm test:watch` - Run tests in watch mode
 - `pnpm test:coverage` - Run tests with coverage
-- `pnpm smoke-test` - Legacy shell-based smoke tests
-- `pnpm verify:build` - Full build verification (includes unit tests)
+- `pnpm test:coverage:integration` - Run integration tests with coverage
 
 ## Resources
 
