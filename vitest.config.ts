@@ -27,8 +27,15 @@ export default defineConfig({
         'src/cli.ts', // CLI entry point
       ],
     },
-    include: ['src/**/*.{test,spec}.{js,ts}'],
-    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
+    include: ['src/**/*.{test,spec}.{js,ts}', 'tests/unit/**/*.test.ts'],
+    exclude: [
+      'node_modules',
+      'dist',
+      '.idea',
+      '.git',
+      '.cache',
+      'tests/integration/**', // Integration tests run separately
+    ],
   },
   resolve: {
     alias: {

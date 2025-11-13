@@ -108,6 +108,9 @@ importers:
       eslint:
         specifier: ^9.38.0
         version: 9.38.0(jiti@2.6.1)
+      execa:
+        specifier: ^9.6.0
+        version: 9.6.0
       globals:
         specifier: ^16.4.0
         version: 16.4.0
