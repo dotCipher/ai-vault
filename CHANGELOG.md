@@ -1,3 +1,9 @@
+## [3.0.2](https://github.com/dotCipher/ai-vault/compare/v3.0.1...v3.0.2) (2025-11-19)
+
+### Bug Fixes
+
+- include full node path in cron jobs for portability ([4b314a7](https://github.com/dotCipher/ai-vault/commit/4b314a7291c4846958cdb371a00e67a1fb9fb82e))
+
 ## [3.0.1](https://github.com/dotCipher/ai-vault/compare/v3.0.0...v3.0.1) (2025-11-19)
 
 ### Bug Fixes
