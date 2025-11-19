@@ -9,6 +9,7 @@ import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import { platform } from 'os';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import type { ScheduleConfig } from '../types/schedule.js';
 
@@ -36,6 +37,30 @@ export class Scheduler {
 
     // Get the full path to the installed binary
     // This is important for cron jobs which don't have the same PATH
+
+    // First, try to resolve from the current script location
+    // This works for both npm global installs and local installs
+    try {
+      const scriptPath = process.argv[1];
+      if (scriptPath && path.isAbsolute(scriptPath)) {
+        // For npm global installs, the script is typically in a bin directory
+        // We need to find the symlink that points to it
+        const binDir = path.dirname(scriptPath);
+        const possibleBinPath = path.join(binDir, 'ai-vault');
+
+        // Check if this is a valid executable
+        try {
+          fsSync.accessSync(possibleBinPath, fsSync.constants.X_OK);
+          return possibleBinPath;
+        } catch {
+          // Not executable or doesn't exist at this path
+        }
+      }
+    } catch {
+      // process.argv[1] not available or invalid
+    }
+
+    // Try which/where command
     try {
       const command = this.platform === 'win32' ? 'where ai-vault' : 'which ai-vault';
       const result = execSync(command, {
