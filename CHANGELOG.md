@@ -1,3 +1,10 @@
+## [3.0.1](https://github.com/dotCipher/ai-vault/compare/v3.0.0...v3.0.1) (2025-11-19)
+
+### Bug Fixes
+
+- add UI files to NPM package and implement comprehensive build validation ([81e95cc](https://github.com/dotCipher/ai-vault/commit/81e95ccf4eb872778fbc43532af441f58b464493))
+- use full path for ai-vault in cron jobs ([c13adf3](https://github.com/dotCipher/ai-vault/commit/c13adf3d3d1a7f858bba39c7a6f7de898d4f5aba))
+
 # [3.0.0](https://github.com/dotCipher/ai-vault/compare/v2.1.0...v3.0.0) (2025-11-11)
 
 ### Bug Fixes
