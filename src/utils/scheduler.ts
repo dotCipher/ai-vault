@@ -18,11 +18,37 @@ const execAsync = promisify(exec);
 export class Scheduler {
   private platform: string;
   private cliPath: string;
+  private nodePath: string;
 
   constructor() {
     this.platform = platform();
     // Get the path to the ai-vault CLI executable
     this.cliPath = this.getCliPath();
+    // Get the path to the node executable for cron jobs
+    this.nodePath = this.getNodePath();
+  }
+
+  /**
+   * Get the path to the node executable
+   * This is critical for cron jobs which don't have the same PATH
+   */
+  private getNodePath(): string {
+    // First, try to get the current node executable path
+    if (process.execPath && path.isAbsolute(process.execPath)) {
+      return process.execPath;
+    }
+
+    // Fallback: Try which/where command
+    try {
+      const command = this.platform === 'win32' ? 'where node' : 'which node';
+      const result = execSync(command, {
+        encoding: 'utf-8',
+      });
+      return result.toString().trim().split('\n')[0];
+    } catch {
+      // Last resort fallback - this will likely fail in cron but matches old behavior
+      return 'node';
+    }
   }
 
   /**
@@ -352,7 +378,13 @@ export class Scheduler {
    * Build the backup command to run
    */
   private buildArchiveCommand(schedule: ScheduleConfig): string {
-    const args: string[] = [this.cliPath, 'backup', `--provider "${schedule.provider}"`];
+    // Use full path to node to ensure cron jobs work correctly
+    const args: string[] = [
+      this.nodePath,
+      this.cliPath,
+      'backup',
+      `--provider "${schedule.provider}"`,
+    ];
 
     // Add schedule ID for status tracking
     args.push(`--schedule-id "${schedule.id}"`);
