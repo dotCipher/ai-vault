@@ -1,3 +1,9 @@
+## [3.1.1](https://github.com/dotCipher/ai-vault/compare/v3.1.0...v3.1.1) (2025-11-22)
+
+### Bug Fixes
+
+- **grok-web:** normalize sender role to lowercase ([fca7d02](https://github.com/dotCipher/ai-vault/commit/fca7d021933738f619273018c37af2c895560df8))
+
 # [3.1.0](https://github.com/dotCipher/ai-vault/compare/v3.0.2...v3.1.0) (2025-11-22)
 
 ### Features
