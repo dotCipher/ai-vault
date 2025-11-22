@@ -473,9 +473,14 @@ export class GrokWebProvider extends BaseProvider {
         // Map API responses to our Message format
         // Response format: { responseId, message, sender, createTime, parentResponseId, mediaTypes, ... }
         const messages: Message[] = responsesData.map((resp: any) => {
+          // Normalize role: 'human' -> 'user', anything else -> lowercase (e.g., 'ASSISTANT' -> 'assistant')
+          const normalizedRole =
+            resp.sender?.toLowerCase() === 'human'
+              ? 'user'
+              : resp.sender?.toLowerCase() || 'assistant';
           const msg: Message = {
             id: resp.responseId || `msg-${Math.random()}`,
-            role: resp.sender === 'human' ? 'user' : resp.sender || 'assistant',
+            role: normalizedRole,
             content: resp.message || resp.query || '',
             timestamp: resp.createTime ? new Date(resp.createTime) : new Date(),
             metadata: {
