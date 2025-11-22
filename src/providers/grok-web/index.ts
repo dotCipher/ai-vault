@@ -721,58 +721,66 @@ export class GrokWebProvider extends BaseProvider {
 
         const messages = messageEls.map((el: Element, idx: number) => {
           // Try to extract the actual role from various sources
-          let role = 'assistant'; // default
+          let role: string | null = null; // null means "not detected"
+          let roleDetected = false;
 
           // Method 1: Check for data-role attribute
           const dataRole = el.getAttribute('data-role');
           if (dataRole) {
-            role = dataRole;
+            role = dataRole.toLowerCase();
+            roleDetected = true;
           }
 
           // Method 2: Check parent container for role
           const parent = el.parentElement;
-          if (parent && !dataRole) {
+          if (!roleDetected && parent) {
             const parentRole = parent.getAttribute('data-role');
             if (parentRole) {
-              role = parentRole;
+              role = parentRole.toLowerCase();
+              roleDetected = true;
             }
           }
 
           // Method 3: Look for role label in previous sibling (often has speaker name)
           const prevSibling = el.previousElementSibling;
-          if (prevSibling && !dataRole) {
+          if (!roleDetected && prevSibling) {
             const prevText = prevSibling.textContent?.trim().toLowerCase();
             // Check for common role names
             if (prevText) {
-              if (prevText.includes('sexy')) role = 'Sexy';
-              else if (prevText.includes('user') || prevText.includes('you')) role = 'user';
-              else if (prevText.includes('assistant') || prevText.includes('grok'))
+              if (prevText.includes('user') || prevText.includes('you')) {
+                role = 'user';
+                roleDetected = true;
+              } else if (prevText.includes('assistant') || prevText.includes('grok')) {
                 role = 'assistant';
-              else if (prevText.includes('eve')) role = 'Eve';
+                roleDetected = true;
+              }
             }
           }
 
           // Method 4: Check parent's previous sibling for role label
-          if (parent && role === 'assistant') {
+          if (!roleDetected && parent) {
             const parentPrevSibling = parent.previousElementSibling;
             if (parentPrevSibling) {
-              const labelText = parentPrevSibling.textContent?.trim();
-              // Only use as role if it's short (likely a label, not content)
-              // and doesn't look like message content
-              if (
-                labelText &&
-                labelText.length < 30 &&
-                labelText.length > 0 &&
-                !labelText.includes('.') && // No sentences
-                !labelText.includes('?') &&
-                !labelText.includes(',') &&
-                labelText.split(' ').length < 5
-              ) {
-                // Max 4 words
-                role = labelText;
+              const labelText = parentPrevSibling.textContent?.trim().toLowerCase();
+              if (labelText) {
+                if (labelText.includes('user') || labelText.includes('you')) {
+                  role = 'user';
+                  roleDetected = true;
+                } else if (labelText.includes('assistant') || labelText.includes('grok')) {
+                  role = 'assistant';
+                  roleDetected = true;
+                }
               }
             }
           }
+
+          // Fallback: If no role detected, alternate user/assistant (first message = user)
+          if (!roleDetected || !role) {
+            role = idx % 2 === 0 ? 'user' : 'assistant';
+          }
+
+          // Ensure role is never null (TypeScript safety)
+          const finalRole: string = role || 'assistant';
 
           // Extract content - use textContent of the element directly
           let content = el.textContent?.trim() || '';
@@ -802,7 +810,7 @@ export class GrokWebProvider extends BaseProvider {
 
           return {
             id: `msg-${idx}`,
-            role: role, // Preserve the actual role (user, assistant, Sexy, Eve, etc.)
+            role: finalRole,
             content,
             timestamp,
             attachments: attachments.length > 0 ? attachments : undefined,
