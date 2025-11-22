@@ -1,3 +1,9 @@
+# [3.1.0](https://github.com/dotCipher/ai-vault/compare/v3.0.2...v3.1.0) (2025-11-22)
+
+### Features
+
+- add stealth plugin for Cloudflare bypass ([5a6091d](https://github.com/dotCipher/ai-vault/commit/5a6091df8bee7d23d80e7445d6a23f989946ae47))
+
 ## [3.0.2](https://github.com/dotCipher/ai-vault/compare/v3.0.1...v3.0.2) (2025-11-19)
 
 ### Bug Fixes
