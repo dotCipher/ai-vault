@@ -1,3 +1,9 @@
+## [3.1.3](https://github.com/dotCipher/ai-vault/compare/v3.1.2...v3.1.3) (2025-11-22)
+
+### Bug Fixes
+
+- **grok-web:** improve DOM scraping role detection ([576c7e0](https://github.com/dotCipher/ai-vault/commit/576c7e0c691e2b13c30a17d7a91f97f325130919))
+
 ## [3.1.2](https://github.com/dotCipher/ai-vault/compare/v3.1.1...v3.1.2) (2025-11-22)
 
 ### Bug Fixes
