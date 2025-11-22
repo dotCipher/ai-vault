@@ -150,9 +150,11 @@ export class GrokXProvider extends BaseProvider {
 
         const messages = messageEls.map((el: Element, idx: number) => {
           const roleEl = el.querySelector('.message-role, [data-role]');
-          const role =
+          // Normalize role to lowercase for consistency
+          const rawRole =
             roleEl?.getAttribute('data-role') ||
             (el.classList.contains('user-message') ? 'user' : 'assistant');
+          const role = rawRole.toLowerCase();
 
           const contentEl = el.querySelector('.message-content, .message-text');
           const content = contentEl?.textContent?.trim() || '';
