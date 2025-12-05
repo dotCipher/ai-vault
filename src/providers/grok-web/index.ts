@@ -34,6 +34,41 @@ export class GrokWebProvider extends BaseProvider {
   readonly supportedAuthMethods: ('api-key' | 'cookies' | 'oauth')[] = ['cookies'];
 
   private scraper?: BrowserScraper;
+  private cachedPage?: any; // Reusable browser page for API calls
+
+  /**
+   * Get or create a reusable browser page for API calls
+   * This avoids creating a new page for every operation
+   */
+  private async getOrCreatePage(): Promise<any> {
+    if (this.cachedPage) {
+      try {
+        // Check if page is still valid
+        await this.cachedPage.evaluate(() => true);
+        return this.cachedPage;
+      } catch {
+        // Page is stale, create a new one
+        this.cachedPage = undefined;
+      }
+    }
+
+    const page = await this.scraper!.createPage({
+      cookies: this.config!.cookies!,
+      domain: '.grok.com',
+    });
+
+    // Navigate to establish session (60s timeout for Cloudflare)
+    await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    // Wait for Cloudflare challenge if present
+    await this.waitForCloudflareChallenge(page);
+
+    // Extra wait to ensure session is fully established
+    await page.waitForTimeout(2000);
+
+    this.cachedPage = page;
+    return page;
+  }
 
   /**
    * Authenticate with Grok Web (grok.com)
@@ -315,147 +350,151 @@ export class GrokWebProvider extends BaseProvider {
   }
 
   /**
+   * Fetch conversation metadata from API
+   */
+  private async fetchConversationMetadata(page: any, conversationId: string): Promise<any> {
+    return await page.evaluate(
+      async ({ id }: { id: string }) => {
+        const res = await fetch(`https://grok.com/rest/app-chat/conversations/${id}`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!res.ok) return null;
+        return await res.json();
+      },
+      { id: conversationId }
+    );
+  }
+
+  /**
+   * Fetch response node IDs for a conversation
+   */
+  private async fetchResponseNodeIds(page: any, conversationId: string): Promise<string[]> {
+    const result = await page.evaluate(
+      async ({ id }: { id: string }) => {
+        const res = await fetch(
+          `https://grok.com/rest/app-chat/conversations/${id}/response-node?includeThreads=true`,
+          {
+            method: 'GET',
+            credentials: 'include',
+          }
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (!data.responseNodes || !Array.isArray(data.responseNodes)) return [];
+        return data.responseNodes.map((node: any) => node.responseId).filter(Boolean);
+      },
+      { id: conversationId }
+    );
+    return result || [];
+  }
+
+  /**
+   * Fetch a single page of message responses
+   * Pagination is done outside page.evaluate() to avoid string overflow
+   */
+  private async fetchMessagesPage(
+    page: any,
+    conversationId: string,
+    responseIds: string[],
+    cursor: string | null
+  ): Promise<{ responses: any[]; nextCursor: string | null; hasMore: boolean }> {
+    const result = await page.evaluate(
+      async ({
+        id,
+        responseIds,
+        cursor,
+      }: {
+        id: string;
+        responseIds: string[];
+        cursor: string | null;
+      }) => {
+        const requestBody: any = { responseIds };
+        if (cursor) {
+          requestBody.cursor = cursor;
+        }
+
+        const res = await fetch(
+          `https://grok.com/rest/app-chat/conversations/${id}/load-responses`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          }
+        );
+
+        if (!res.ok) {
+          return { responses: [], nextCursor: null, hasMore: false, error: res.status };
+        }
+
+        const data = await res.json();
+        return {
+          responses: data.responses || [],
+          nextCursor: data.nextCursor || data.cursor || data.nextPageToken || data.next || null,
+          hasMore: data.hasMore || data.hasNextPage || false,
+        };
+      },
+      { id: conversationId, responseIds, cursor }
+    );
+    return result;
+  }
+
+  /**
    * Fetch complete conversation from grok.com
    */
   async fetchConversation(id: string): Promise<Conversation> {
     this.requireAuth();
-    const page = await this.scraper!.createPage({
-      cookies: this.config!.cookies!,
-      domain: '.grok.com',
-    });
+    const page = await this.getOrCreatePage();
 
     try {
-      // Navigate to the conversation page (Grok uses /c/ for conversations now)
-      const url = `https://grok.com/c/${id}`;
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      // Fetch metadata and response node IDs (small responses, safe to do in browser)
+      const metadata = await this.fetchConversationMetadata(page, id);
+      const responseIds = await this.fetchResponseNodeIds(page, id);
 
-      // Wait for page to be ready
-      await page.waitForTimeout(2000);
+      // Paginate through messages OUTSIDE browser context to avoid string overflow
+      let allResponses: any[] = [];
+      if (responseIds.length > 0) {
+        let cursor: string | null = null;
+        let pageCount = 0;
+        const maxPages = 100;
 
-      // Attempt to fetch conversation via REST API from within the page context
-      const apiData = await page.evaluate(async (conversationId) => {
-        try {
-          // Fetch conversation metadata
-          const metadataResponse = await fetch(
-            `https://grok.com/rest/app-chat/conversations/${conversationId}`,
-            {
-              method: 'GET',
-              credentials: 'include',
-            }
-          );
+        while (pageCount < maxPages) {
+          pageCount++;
+          const result = await this.fetchMessagesPage(page, id, responseIds, cursor);
 
-          let metadata = null;
-          if (metadataResponse.ok) {
-            metadata = await metadataResponse.json();
+          if (result.responses && Array.isArray(result.responses)) {
+            allResponses.push(...result.responses);
           }
 
-          // Step 1: Get all responseIds from response-node endpoint
-          const responseNodeUrl = `https://grok.com/rest/app-chat/conversations/${conversationId}/response-node?includeThreads=true`;
-
-          const responseNodeResponse = await fetch(responseNodeUrl, {
-            method: 'GET',
-            credentials: 'include',
-          });
-
-          let responses = null;
-          if (responseNodeResponse.ok) {
-            const nodeData = await responseNodeResponse.json();
-
-            if (nodeData.responseNodes && Array.isArray(nodeData.responseNodes)) {
-              const responseNodes = nodeData.responseNodes;
-
-              // Extract all responseIds
-              const responseIds = responseNodes.map((node: any) => node.responseId).filter(Boolean);
-
-              if (responseIds.length > 0) {
-                // Step 2: Paginate through load-responses to fetch ALL messages
-                const loadResponsesUrl = `https://grok.com/rest/app-chat/conversations/${conversationId}/load-responses`;
-
-                let allResponses: any[] = [];
-                let cursor: string | null = null;
-                let pageCount = 0;
-                const maxPages = 100; // Safety limit to prevent infinite loops
-
-                // Keep fetching until no more pages
-                while (pageCount < maxPages) {
-                  pageCount++;
-
-                  // Build request body with responseIds and optional cursor for pagination
-                  const requestBody: any = { responseIds };
-                  if (cursor) {
-                    requestBody.cursor = cursor;
-                  }
-
-                  const messagesResponse = await fetch(loadResponsesUrl, {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(requestBody),
-                  });
-
-                  if (!messagesResponse.ok) {
-                    console.warn(
-                      `load-responses returned ${messagesResponse.status} on page ${pageCount}`
-                    );
-                    break;
-                  }
-
-                  const data = await messagesResponse.json();
-
-                  // The API returns { responses: [...] } array
-                  if (data.responses && Array.isArray(data.responses)) {
-                    allResponses = allResponses.concat(data.responses);
-                  }
-
-                  // Check for pagination info (various possible field names)
-                  const hasMore = data.hasMore || data.hasNextPage || false;
-                  const nextCursor =
-                    data.nextCursor || data.cursor || data.nextPageToken || data.next || null;
-
-                  // Debug logging for pagination
-                  if (pageCount === 1) {
-                    console.log(`Fetched page 1: ${data.responses?.length || 0} messages`);
-                  } else {
-                    console.log(
-                      `Fetched page ${pageCount}: ${data.responses?.length || 0} messages (cursor: ${cursor ? 'yes' : 'no'})`
-                    );
-                  }
-
-                  // Stop if no more pages or no cursor to continue
-                  if (!hasMore && !nextCursor) {
-                    break;
-                  }
-
-                  // Update cursor for next iteration
-                  cursor = nextCursor;
-
-                  // Safety check: if cursor didn't change, break to avoid infinite loop
-                  if (!cursor) {
-                    break;
-                  }
-                }
-
-                if (pageCount >= maxPages) {
-                  console.warn(
-                    `Reached maximum page limit (${maxPages}) for conversation ${conversationId}`
-                  );
-                }
-
-                console.log(
-                  `Total messages fetched across ${pageCount} page(s): ${allResponses.length}`
-                );
-                responses = allResponses;
-              }
-            }
+          if (pageCount === 1) {
+            console.log(`Fetched page 1: ${result.responses?.length || 0} messages`);
+          } else {
+            console.log(
+              `Fetched page ${pageCount}: ${result.responses?.length || 0} messages (cursor: ${cursor ? 'yes' : 'no'})`
+            );
           }
 
-          return { metadata, responses };
-        } catch {
-          return null;
+          // Stop if no more pages
+          if (!result.hasMore && !result.nextCursor) {
+            break;
+          }
+
+          cursor = result.nextCursor;
+          if (!cursor) break;
         }
-      }, id);
+
+        if (pageCount >= maxPages) {
+          console.warn(`Reached maximum page limit (${maxPages}) for conversation ${id}`);
+        }
+        console.log(`Total messages fetched across ${pageCount} page(s): ${allResponses.length}`);
+      }
+
+      // Build apiData structure for compatibility with existing code
+      const apiData = {
+        metadata,
+        responses: allResponses.length > 0 ? allResponses : null,
+      };
 
       // If API returned data with responses, use it
       if (
@@ -465,7 +504,7 @@ export class GrokWebProvider extends BaseProvider {
         Array.isArray(apiData.responses) &&
         apiData.responses.length > 0
       ) {
-        await page.close();
+        // Don't close cached page - it will be reused
 
         const metadata = apiData.metadata;
         const responsesData = apiData.responses;
@@ -587,12 +626,15 @@ export class GrokWebProvider extends BaseProvider {
       }
 
       // If API didn't return messages, fall back to page scraping
-      // Note: Page is already on the conversation URL from earlier navigation
+      // Navigate to conversation page for DOM scraping
+      const conversationUrl = `https://grok.com/c/${id}`;
+      await page.goto(conversationUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.waitForTimeout(2000);
 
       // Track audio URLs from network requests
       const audioUrlsFromNetwork: string[] = [];
 
-      page.on('response', async (response) => {
+      page.on('response', async (response: any) => {
         const url = response.url();
         const contentType = response.headers()['content-type'] || '';
 
@@ -610,7 +652,7 @@ export class GrokWebProvider extends BaseProvider {
       // Check if conversation exists
       const notFound = await page.$('.error-page, [data-testid="error"]');
       if (notFound) {
-        await page.close();
+        this.cachedPage = undefined; // Invalidate cached page on error
         throw new NotFoundError(`Conversation ${id} not found`);
       }
 
@@ -854,16 +896,16 @@ export class GrokWebProvider extends BaseProvider {
         }
       }
 
-      await page.close();
+      // Don't close cached page - it will be reused
 
       // Transform to standard format
-      const messages: Message[] = data.messages.map((msg) => ({
+      const messages: Message[] = data.messages.map((msg: any) => ({
         id: msg.id,
         role: msg.role,
         content: msg.content,
         timestamp: new Date(msg.timestamp),
         attachments: msg.attachments?.map(
-          (att): Attachment => ({
+          (att: any): Attachment => ({
             id: att.id,
             type: att.type,
             url: this.resolveUrl(att.url),
@@ -952,7 +994,8 @@ export class GrokWebProvider extends BaseProvider {
           Object.keys(hierarchy).length > 0 ? (hierarchy as ConversationHierarchy) : undefined,
       };
     } catch (error) {
-      await page.close();
+      // Invalidate cached page on error
+      this.cachedPage = undefined;
       throw error;
     }
   }
@@ -1259,6 +1302,14 @@ export class GrokWebProvider extends BaseProvider {
    * Cleanup browser resources
    */
   async cleanup(): Promise<void> {
+    if (this.cachedPage) {
+      try {
+        await this.cachedPage.close();
+      } catch {
+        // Ignore errors when closing
+      }
+      this.cachedPage = undefined;
+    }
     if (this.scraper) {
       await this.scraper.close();
       this.scraper = undefined;

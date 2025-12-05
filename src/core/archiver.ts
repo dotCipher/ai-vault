@@ -258,6 +258,35 @@ export class Archiver {
               return { status: 'archived' as const, summary, conversation };
             }
 
+            // Check content hash to skip save if content is identical
+            // This catches cases where updatedAt changed but content didn't
+            if (exists && options.skipExisting) {
+              const localHash = await this.storage.getContentHash(provider.name, summary.id);
+              if (localHash) {
+                const messages = conversation.messages;
+                if (messages.length > 0) {
+                  const lastMessage = messages[messages.length - 1];
+                  const hashInput = `${messages.length}:${lastMessage.content}`;
+                  const crypto = await import('crypto');
+                  const newHash = crypto
+                    .createHash('sha256')
+                    .update(hashInput)
+                    .digest('hex')
+                    .substring(0, 16);
+
+                  if (localHash === newHash) {
+                    completed++;
+                    console.log(
+                      chalk.gray(
+                        `[${completed}/${total}] Skipped: ${summary.title} (content unchanged)`
+                      )
+                    );
+                    return { status: 'skipped' as const, summary };
+                  }
+                }
+              }
+            }
+
             // Save conversation
             await this.storage.saveConversation(conversation);
 

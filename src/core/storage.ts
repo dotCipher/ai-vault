@@ -9,6 +9,7 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import crypto from 'crypto';
 import { promisify } from 'util';
 import type { Conversation, Asset, Workspace, Project } from '../types/index.js';
 import type {
@@ -342,6 +343,9 @@ export class Storage {
    * Update conversation index (batched if in batch mode, immediate otherwise)
    */
   private async updateIndex(conversation: Conversation, conversationPath: string): Promise<void> {
+    // Compute content hash from last message for incremental backup detection
+    const contentHash = this.computeContentHash(conversation);
+
     const indexEntry: ConversationIndex[string] = {
       title: conversation.title,
       provider: conversation.provider,
@@ -352,6 +356,7 @@ export class Storage {
       hasMedia: conversation.messages.some((m) => m.attachments && m.attachments.length > 0),
       mediaCount: conversation.messages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
       path: path.relative(path.join(this.config.baseDir, conversation.provider), conversationPath),
+      contentHash,
     };
 
     // Include hierarchy info if present
@@ -569,6 +574,32 @@ export class Storage {
    */
   private capitalize(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  /**
+   * Compute a content hash for incremental backup detection
+   * Uses the last message content + message count for fast change detection
+   */
+  private computeContentHash(conversation: Conversation): string {
+    const messages = conversation.messages;
+    if (messages.length === 0) {
+      return crypto.createHash('sha256').update('empty').digest('hex').substring(0, 16);
+    }
+
+    // Use last message content + total count for hash
+    // This catches both new messages and edits to the last message
+    const lastMessage = messages[messages.length - 1];
+    const hashInput = `${messages.length}:${lastMessage.content}`;
+
+    return crypto.createHash('sha256').update(hashInput).digest('hex').substring(0, 16);
+  }
+
+  /**
+   * Get content hash for a locally stored conversation
+   */
+  async getContentHash(provider: string, conversationId: string): Promise<string | undefined> {
+    const index = await this.getIndex(provider);
+    return index[conversationId]?.contentHash;
   }
 
   /**

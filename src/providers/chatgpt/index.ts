@@ -131,7 +131,133 @@ export class ChatGPTProvider extends BaseProvider {
   }
 
   /**
+   * Fetch a single page of conversations from the API
+   * Returns minimal data to avoid string overflow in page.evaluate()
+   */
+  private async fetchConversationPage(
+    page: any,
+    accessToken: string,
+    offset: number,
+    limit: number,
+    isArchived: boolean
+  ): Promise<{ items: any[]; hasMore: boolean }> {
+    const result = await page.evaluate(
+      async ({
+        offset,
+        limit,
+        isArchived,
+        token,
+      }: {
+        offset: number;
+        limit: number;
+        isArchived: boolean;
+        token: string;
+      }) => {
+        const url = `https://chatgpt.com/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated&is_archived=${isArchived}&is_starred=false`;
+
+        const res = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          if (offset === 0) {
+            throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+          }
+          return { items: [], hasMore: false, error: true };
+        }
+
+        const data = await res.json();
+        const items = data?.items || [];
+
+        // Return only the minimal fields we need to avoid large data transfer
+        const minimalItems = items.map((conv: any) => ({
+          id: conv.id,
+          title: conv.title || 'Untitled',
+          create_time: conv.create_time,
+          update_time: conv.update_time,
+        }));
+
+        return {
+          items: minimalItems,
+          hasMore: items.length === limit && data.has_missing_conversations !== false,
+        };
+      },
+      { offset, limit, isArchived, token: accessToken }
+    );
+
+    return result;
+  }
+
+  /**
+   * Unarchive a batch of conversations
+   */
+  private async unarchiveConversations(
+    page: any,
+    accessToken: string,
+    conversationIds: string[]
+  ): Promise<void> {
+    if (conversationIds.length === 0) return;
+
+    await page.evaluate(
+      async ({ ids, token }: { ids: string[]; token: string }) => {
+        const headers = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        };
+
+        for (const id of ids) {
+          try {
+            await fetch(`https://chatgpt.com/backend-api/conversation/${id}`, {
+              method: 'PATCH',
+              credentials: 'include',
+              headers,
+              body: JSON.stringify({ is_archived: false }),
+            });
+          } catch {
+            // Silently continue on failure
+          }
+        }
+      },
+      { ids: conversationIds, token: accessToken }
+    );
+  }
+
+  /**
+   * Fetch projects/gizmos data
+   */
+  private async fetchProjects(page: any, accessToken: string): Promise<any> {
+    const projectsUrl = `https://chatgpt.com/backend-api/gizmos/snorlax/sidebar?conversations_per_gizmo=20&owned_only=true`;
+
+    try {
+      return await page.evaluate(
+        async ({ url, token }: { url: string; token: string }) => {
+          const res = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!res.ok) return null;
+          return await res.json();
+        },
+        { url: projectsUrl, token: accessToken }
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * List conversations from ChatGPT using backend API
+   * Pagination is done outside page.evaluate() to avoid string overflow
    */
   async listConversations(options: ListConversationsOptions = {}): Promise<ConversationSummary[]> {
     this.requireAuth();
@@ -162,120 +288,64 @@ export class ChatGPTProvider extends BaseProvider {
         accessToken = result.token;
       }
 
-      // Use backend API to fetch both conversations and projects with pagination
-      const limit = 100; // API limit per request
-      const requestedLimit = options.limit; // User-requested limit (optional)
-      const projectsUrl = `https://chatgpt.com/backend-api/gizmos/snorlax/sidebar?conversations_per_gizmo=20&owned_only=true`;
+      const pageSize = 100; // API limit per request
+      const requestedLimit = options.limit;
 
-      const response = await page.evaluate(
-        async ({ limit, requestedLimit, projectsUrl, token }) => {
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          };
+      // Fetch regular conversations with pagination outside browser context
+      const regularConversations: any[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-          // Helper function to fetch all conversations with pagination
-          const fetchAllConversations = async (isArchived: boolean) => {
-            const allItems: any[] = [];
-            let offset = 0;
-            let hasMore = true;
+      while (hasMore) {
+        const result = await this.fetchConversationPage(page, accessToken, offset, pageSize, false);
+        regularConversations.push(...result.items);
 
-            while (hasMore) {
-              const url = `https://chatgpt.com/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated&is_archived=${isArchived}&is_starred=false`;
+        hasMore = result.hasMore;
+        if (requestedLimit && regularConversations.length >= requestedLimit) {
+          hasMore = false;
+        }
+        offset += pageSize;
+      }
 
-              const res = await fetch(url, {
-                method: 'GET',
-                credentials: 'include',
-                headers,
-              });
+      // Fetch archived conversations with pagination outside browser context
+      const archivedConversations: any[] = [];
+      offset = 0;
+      hasMore = true;
 
-              if (!res.ok) {
-                if (offset === 0) {
-                  throw new Error(`API request failed: ${res.status} ${res.statusText}`);
-                }
-                // If not first page, just stop pagination
-                break;
-              }
+      while (hasMore) {
+        const result = await this.fetchConversationPage(page, accessToken, offset, pageSize, true);
+        archivedConversations.push(...result.items);
 
-              const data = await res.json();
-              const items = data?.items || [];
+        hasMore = result.hasMore;
+        if (
+          requestedLimit &&
+          regularConversations.length + archivedConversations.length >= requestedLimit
+        ) {
+          hasMore = false;
+        }
+        offset += pageSize;
+      }
 
-              if (items.length === 0) {
-                break;
-              }
+      // Unarchive archived conversations in batches
+      if (archivedConversations.length > 0) {
+        const batchSize = 50;
+        for (let i = 0; i < archivedConversations.length; i += batchSize) {
+          const batch = archivedConversations.slice(i, i + batchSize).map((c) => c.id);
+          await this.unarchiveConversations(page, accessToken, batch);
+        }
+        console.log(`[ChatGPT] Unarchived ${archivedConversations.length} archived conversations`);
+      }
 
-              allItems.push(...items);
-
-              // Check if we've fetched all or reached user's requested limit
-              hasMore = items.length === limit && data.has_missing_conversations !== false;
-              if (requestedLimit && allItems.length >= requestedLimit) {
-                hasMore = false;
-              }
-
-              offset += limit;
-            }
-
-            return allItems;
-          };
-
-          // Fetch all regular conversations
-          const regularConversations = await fetchAllConversations(false);
-
-          // Fetch all archived conversations
-          const archivedConversations = await fetchAllConversations(true);
-
-          // Unarchive all archived conversations
-          for (const conv of archivedConversations) {
-            try {
-              await fetch(`https://chatgpt.com/backend-api/conversation/${conv.id}`, {
-                method: 'PATCH',
-                credentials: 'include',
-                headers,
-                body: JSON.stringify({ is_archived: false }),
-              });
-            } catch (err) {
-              console.error(`Failed to unarchive conversation ${conv.id}:`, err);
-            }
-          }
-
-          // Fetch projects
-          let projectsData = null;
-          try {
-            const projectsRes = await fetch(projectsUrl, {
-              method: 'GET',
-              credentials: 'include',
-              headers,
-            });
-
-            if (projectsRes.ok) {
-              projectsData = await projectsRes.json();
-            }
-          } catch {
-            // Projects fetch is optional, continue without them
-          }
-
-          return {
-            conversations: { items: regularConversations },
-            archivedConversations: { items: archivedConversations },
-            projects: projectsData,
-          };
-        },
-        { limit, requestedLimit, projectsUrl, token: accessToken }
-      );
+      // Fetch projects
+      const projectsData = await this.fetchProjects(page, accessToken);
 
       await page.close();
 
-      // Parse API response - combine regular and archived conversations
-      const conversations = response.conversations?.items || [];
-      const archivedConversations = response.archivedConversations?.items || [];
-      const allConversations = [...conversations, ...archivedConversations];
+      // Combine all conversations
+      const allConversations = [...regularConversations, ...archivedConversations];
 
       if (!Array.isArray(allConversations)) {
         throw new Error('Unexpected API response format');
-      }
-
-      if (archivedConversations.length > 0) {
-        console.log(`[ChatGPT] Unarchived ${archivedConversations.length} archived conversations`);
       }
 
       // Transform to ConversationSummary format
@@ -290,8 +360,8 @@ export class ChatGPTProvider extends BaseProvider {
       }));
 
       // Extract conversations from projects/gizmos
-      if (response.projects?.items) {
-        for (const item of response.projects.items) {
+      if (projectsData?.items) {
+        for (const item of projectsData.items) {
           const gizmo = item.gizmo?.gizmo;
           const projectName = gizmo?.display?.name || 'Untitled Project';
           const projectConversations = item.conversations?.items || [];
