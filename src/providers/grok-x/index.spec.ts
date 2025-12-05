@@ -92,8 +92,8 @@ describe('GrokXProvider', () => {
         domain: '.x.com',
       });
       expect(mockPage.goto).toHaveBeenCalledWith('https://x.com/i/grok', {
-        waitUntil: 'networkidle',
-        timeout: 30000,
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
       });
     });
 
