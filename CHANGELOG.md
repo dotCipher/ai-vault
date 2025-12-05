@@ -1,3 +1,13 @@
+# [3.2.0](https://github.com/dotCipher/ai-vault/compare/v3.1.3...v3.2.0) (2025-12-05)
+
+### Bug Fixes
+
+- auto install playwright if not installed ([c8d47bc](https://github.com/dotCipher/ai-vault/commit/c8d47bc8f533f083df224189e84fae488f681808))
+
+### Features
+
+- **scraper:** auto-install Playwright browsers if missing ([a4f9b00](https://github.com/dotCipher/ai-vault/commit/a4f9b00f6b1cb07d2ec04f581341e6c778dcabbd))
+
 ## [3.1.3](https://github.com/dotCipher/ai-vault/compare/v3.1.2...v3.1.3) (2025-11-22)
 
 ### Bug Fixes
