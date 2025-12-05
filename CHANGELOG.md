@@ -1,3 +1,10 @@
+## [3.2.1](https://github.com/dotCipher/ai-vault/compare/v3.2.0...v3.2.1) (2025-12-05)
+
+### Bug Fixes
+
+- prevent string overflow when fetching large conversation lists ([292ec36](https://github.com/dotCipher/ai-vault/commit/292ec365579e7a9481aed701f6771fc0fa0ebd34))
+- update test mocks to match new pagination API structure ([d573c5d](https://github.com/dotCipher/ai-vault/commit/d573c5d3adc20c6790b996df22ae76191cd362ab))
+
 # [3.2.0](https://github.com/dotCipher/ai-vault/compare/v3.1.3...v3.2.0) (2025-12-05)
 
 ### Bug Fixes
