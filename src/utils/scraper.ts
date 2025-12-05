@@ -2,7 +2,38 @@
  * Reusable web scraping utilities for providers
  */
 
+import { execSync } from 'child_process';
 import { chromium as playwrightChromium, firefox, type Browser, type Page } from 'playwright';
+
+/**
+ * Check if Playwright browsers are installed and install them if missing
+ */
+async function ensurePlaywrightBrowsers(): Promise<void> {
+  try {
+    // Try to get browser executable path - this will throw if not installed
+    const chromiumPath = playwrightChromium.executablePath();
+    const firefoxPath = firefox.executablePath();
+
+    // Check if the executables actually exist
+    const fs = await import('fs');
+    if (!fs.existsSync(chromiumPath) || !fs.existsSync(firefoxPath)) {
+      throw new Error('Browser executables not found');
+    }
+  } catch {
+    console.log('[INFO] Playwright browsers not found, installing...');
+    try {
+      execSync('npx playwright install chromium firefox', {
+        stdio: 'inherit',
+        timeout: 300000, // 5 minute timeout
+      });
+      console.log('[INFO] Playwright browsers installed successfully');
+    } catch (installError) {
+      throw new Error(
+        `Failed to install Playwright browsers. Please run 'npx playwright install' manually. Error: ${installError}`
+      );
+    }
+  }
+}
 
 // Dynamically import playwright-extra and stealth plugin for better bot detection bypass
 let stealthChromium: any = null;
@@ -15,7 +46,6 @@ try {
   const StealthPlugin = (await import('puppeteer-extra-plugin-stealth')).default;
   playwrightExtraChromium.use(StealthPlugin());
   stealthChromium = playwrightExtraChromium;
-  console.log('[INFO] Stealth plugin loaded for enhanced bot detection bypass');
 } catch {
   console.log('[INFO] Stealth plugin not available, using standard playwright');
 }
@@ -43,8 +73,8 @@ export class BrowserScraper {
     this.config = {
       headless: true,
       userAgent:
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      timeout: 30000,
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      timeout: 60000,
       browser: 'chromium', // Default to chromium
       ...config,
     };
@@ -55,6 +85,9 @@ export class BrowserScraper {
    */
   async init(): Promise<void> {
     if (this.browser) return;
+
+    // Ensure Playwright browsers are installed
+    await ensurePlaywrightBrowsers();
 
     // Check for DEBUG environment variable
     const debugMode = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
