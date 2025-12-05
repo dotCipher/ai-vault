@@ -51,7 +51,7 @@ export class GrokXProvider extends BaseProvider {
       domain: '.x.com',
     });
 
-    await page.goto('https://x.com/i/grok', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto('https://x.com/i/grok', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Check if we're redirected to login
     const url = page.url();

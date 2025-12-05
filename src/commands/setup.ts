@@ -218,7 +218,7 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       }
 
       // Use sso value if sso-rw is empty
-      const ssoRwTrimmed = (ssoRwValue as string).trim();
+      const ssoRwTrimmed = ssoRwValue ? (ssoRwValue as string).trim() : '';
       cookies['sso-rw'] = ssoRwTrimmed.length > 0 ? ssoRwTrimmed : cookies['sso'];
 
       if (ssoRwTrimmed.length === 0) {
