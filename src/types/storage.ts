@@ -116,6 +116,8 @@ export interface ConversationIndex {
     hasMedia: boolean;
     mediaCount: number;
     path: string;
+    // Hash of last message content for incremental backup detection
+    contentHash?: string;
     // Hierarchy info for fast lookups
     workspaceId?: string;
     workspaceName?: string;

@@ -39,6 +39,34 @@ export class ClaudeProvider extends BaseProvider {
   private organizationId?: string;
   private conversationProjects: Map<string, string> = new Map(); // conversationId -> projectName
   private projects: Map<string, ClaudeProject> = new Map(); // projectId -> project data
+  private cachedPage?: any; // Reusable browser page for API calls
+
+  /**
+   * Get or create a reusable browser page for API calls
+   * This avoids creating a new page for every operation
+   */
+  private async getOrCreatePage(): Promise<any> {
+    if (this.cachedPage) {
+      try {
+        // Check if page is still valid
+        await this.cachedPage.evaluate(() => true);
+        return this.cachedPage;
+      } catch {
+        // Page is stale, create a new one
+        this.cachedPage = undefined;
+      }
+    }
+
+    const page = await this.scraper!.createPage({
+      cookies: this.config!.cookies!,
+      domain: '.claude.ai',
+    });
+
+    // Navigate to establish session
+    await page.goto('https://claude.ai', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    this.cachedPage = page;
+    return page;
+  }
 
   /**
    * Authenticate with Claude using sessionKey cookie
@@ -120,7 +148,82 @@ export class ClaudeProvider extends BaseProvider {
   }
 
   /**
+   * Fetch a single page of conversations from the API
+   * Returns minimal data to avoid string overflow in page.evaluate()
+   */
+  private async fetchConversationPage(
+    page: any,
+    pageNum: number,
+    limit: number
+  ): Promise<{ items: any[]; hasMore: boolean }> {
+    const url = `https://claude.ai/api/organizations/${this.organizationId}/chat_conversations?limit=${limit}&page=${pageNum}`;
+
+    const result = await page.evaluate(
+      async ({ url }: { url: string }) => {
+        const res = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        if (!res.ok) {
+          return { items: [], hasMore: false, error: res.status };
+        }
+
+        const data = await res.json();
+        const conversations = Array.isArray(data) ? data : [];
+
+        // Return only minimal fields to avoid large data transfer
+        const minimalItems = conversations.map((conv: any) => ({
+          uuid: conv.uuid,
+          name: conv.name || 'Untitled',
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+          summary: conv.summary,
+          project_uuid: conv.project_uuid,
+        }));
+
+        return {
+          items: minimalItems,
+          hasMore: conversations.length === 100, // API limit
+        };
+      },
+      { url }
+    );
+
+    if (result.error && pageNum === 1) {
+      throw new Error(`API request failed: ${result.error}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Fetch projects for the organization
+   */
+  private async fetchProjects(page: any): Promise<any[]> {
+    const url = `https://claude.ai/api/organizations/${this.organizationId}/projects`;
+
+    try {
+      return await page.evaluate(
+        async ({ url }: { url: string }) => {
+          const res = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+          });
+
+          if (!res.ok) return [];
+          return await res.json();
+        },
+        { url }
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * List conversations from Claude API with pagination
+   * Pagination is done outside page.evaluate() to avoid string overflow
    */
   async listConversations(options: ListConversationsOptions = {}): Promise<ConversationSummary[]> {
     this.requireAuth();
@@ -129,95 +232,40 @@ export class ClaudeProvider extends BaseProvider {
       throw new Error('Organization ID not available. Authentication may have failed.');
     }
 
-    const page = await this.scraper!.createPage({
-      cookies: this.config!.cookies!,
-      domain: '.claude.ai',
-    });
+    const page = await this.getOrCreatePage();
 
     try {
-      // Quick navigation to establish session
-      await page.goto('https://claude.ai', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      const pageSize = 100; // API limit per request
+      const requestedLimit = options.limit;
 
-      // Fetch conversations and projects in parallel
-      const response = await page.evaluate(
-        async ({ orgId, requestedLimit }) => {
-          const limit = 100; // API limit per request
-          const conversationsUrl = `https://claude.ai/api/organizations/${orgId}/chat_conversations`;
-          const projectsUrl = `https://claude.ai/api/organizations/${orgId}/projects`;
+      // Fetch conversations with pagination outside browser context
+      const allConversations: any[] = [];
+      let pageNum = 1;
+      let hasMore = true;
 
-          // Fetch all conversations with pagination
-          const allConversations: any[] = [];
-          let page = 1;
-          let hasMore = true;
+      while (hasMore) {
+        const result = await this.fetchConversationPage(page, pageNum, pageSize);
+        allConversations.push(...result.items);
 
-          while (hasMore) {
-            const url = `${conversationsUrl}?limit=${limit}&page=${page}`;
+        hasMore = result.hasMore;
+        if (requestedLimit && allConversations.length >= requestedLimit) {
+          hasMore = false;
+        }
+        pageNum++;
+      }
 
-            const res = await fetch(url, {
-              method: 'GET',
-              credentials: 'include',
-            });
-
-            if (!res.ok) {
-              if (page === 1) {
-                throw new Error(`API request failed: ${res.status} ${res.statusText}`);
-              }
-              // If not first page, stop pagination
-              break;
-            }
-
-            const data = await res.json();
-            const conversations = Array.isArray(data) ? data : [];
-
-            if (conversations.length === 0) {
-              break;
-            }
-
-            allConversations.push(...conversations);
-
-            // Check if we've reached the requested limit
-            hasMore = conversations.length === limit;
-            if (requestedLimit && allConversations.length >= requestedLimit) {
-              hasMore = false;
-            }
-
-            page++;
-          }
-
-          // Fetch projects for organization
-          let projectsData: any[] = [];
-          try {
-            const projectsRes = await fetch(projectsUrl, {
-              method: 'GET',
-              credentials: 'include',
-            });
-
-            if (projectsRes.ok) {
-              projectsData = await projectsRes.json();
-            }
-          } catch {
-            // Projects are optional
-          }
-
-          return {
-            conversations: allConversations,
-            projects: projectsData,
-          };
-        },
-        { orgId: this.organizationId, requestedLimit: options.limit }
-      );
-
-      await page.close();
+      // Fetch projects
+      const projectsData = await this.fetchProjects(page);
 
       // Store projects for later use
-      if (Array.isArray(response.projects)) {
-        for (const proj of response.projects) {
+      if (Array.isArray(projectsData)) {
+        for (const proj of projectsData) {
           this.projects.set(proj.uuid, proj);
         }
       }
 
       // Transform to ConversationSummary format
-      let summaries: ConversationSummary[] = response.conversations.map((conv: any) => {
+      let summaries: ConversationSummary[] = allConversations.map((conv: any) => {
         // Map conversation to project if available
         if (conv.project_uuid && this.projects.has(conv.project_uuid)) {
           const project = this.projects.get(conv.project_uuid)!;
@@ -250,7 +298,8 @@ export class ClaudeProvider extends BaseProvider {
 
       return summaries;
     } catch (error) {
-      await page.close();
+      // Don't close the cached page on error, just invalidate it
+      this.cachedPage = undefined;
       throw error;
     }
   }
@@ -265,20 +314,14 @@ export class ClaudeProvider extends BaseProvider {
       throw new Error('Organization ID not available. Authentication may have failed.');
     }
 
-    const page = await this.scraper!.createPage({
-      cookies: this.config!.cookies!,
-      domain: '.claude.ai',
-    });
+    const page = await this.getOrCreatePage();
 
     try {
-      // Quick navigation to establish session
-      await page.goto('https://claude.ai', { waitUntil: 'domcontentloaded', timeout: 15000 });
-
       // Fetch conversation details with full message history
-      const data = await page.evaluate(
-        async ({ orgId, conversationId }) => {
-          const url = `https://claude.ai/api/organizations/${orgId}/chat_conversations/${conversationId}?tree=True&rendering_mode=messages&render_all_tools=true`;
+      const url = `https://claude.ai/api/organizations/${this.organizationId}/chat_conversations/${id}?tree=True&rendering_mode=messages&render_all_tools=true`;
 
+      const data = await page.evaluate(
+        async ({ url }: { url: string }) => {
           const res = await fetch(url, {
             method: 'GET',
             credentials: 'include',
@@ -290,10 +333,8 @@ export class ClaudeProvider extends BaseProvider {
 
           return await res.json();
         },
-        { orgId: this.organizationId, conversationId: id }
+        { url }
       );
-
-      await page.close();
 
       // Parse conversation data
       const title = data.name || 'Untitled';
@@ -438,7 +479,8 @@ export class ClaudeProvider extends BaseProvider {
           Object.keys(hierarchy).length > 0 ? (hierarchy as ConversationHierarchy) : undefined,
       };
     } catch (error) {
-      await page.close();
+      // Invalidate cached page on error
+      this.cachedPage = undefined;
       throw error;
     }
   }
@@ -447,6 +489,14 @@ export class ClaudeProvider extends BaseProvider {
    * Cleanup browser resources
    */
   async cleanup(): Promise<void> {
+    if (this.cachedPage) {
+      try {
+        await this.cachedPage.close();
+      } catch {
+        // Ignore errors when closing
+      }
+      this.cachedPage = undefined;
+    }
     if (this.scraper) {
       await this.scraper.close();
       this.scraper = undefined;
