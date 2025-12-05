@@ -236,14 +236,19 @@ describe('GrokWebProvider', () => {
     });
 
     it('should fetch and parse conversation correctly', async () => {
-      // Mock API response format that matches the actual API
-      const mockApiData = {
-        metadata: {
-          id: 'test-id',
-          title: 'Test Chat',
-          createTime: '2025-01-01T00:00:00Z',
-          modifyTime: '2025-01-01T00:02:00Z',
-        },
+      // Mock metadata response
+      const mockMetadata = {
+        id: 'test-id',
+        title: 'Test Chat',
+        createTime: '2025-01-01T00:00:00Z',
+        modifyTime: '2025-01-01T00:02:00Z',
+      };
+
+      // Mock response node IDs
+      const mockResponseNodeIds = ['resp-0', 'resp-1'];
+
+      // Mock messages page response
+      const mockMessagesPage = {
         responses: [
           {
             responseId: 'resp-0',
@@ -259,6 +264,8 @@ describe('GrokWebProvider', () => {
             generatedImageUrls: ['https://example.com/image.png'],
           },
         ],
+        nextCursor: null,
+        hasMore: false,
       };
 
       const mockPage = {
@@ -267,7 +274,18 @@ describe('GrokWebProvider', () => {
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         $: vi.fn().mockResolvedValue(null), // no error page
         on: vi.fn(), // for response listener
-        evaluate: vi.fn().mockResolvedValue(mockApiData),
+        evaluate: vi
+          .fn()
+          // First call: isAuthenticated -> waitForCloudflareChallenge (not challenging)
+          .mockResolvedValueOnce(false)
+          // Second call: getOrCreatePage -> initCachedPage -> waitForCloudflareChallenge
+          .mockResolvedValueOnce(false)
+          // Third call: fetchConversationMetadata
+          .mockResolvedValueOnce(mockMetadata)
+          // Fourth call: fetchResponseNodeIds
+          .mockResolvedValueOnce(mockResponseNodeIds)
+          // Fifth call: fetchMessagesPage
+          .mockResolvedValueOnce(mockMessagesPage),
         close: vi.fn().mockResolvedValue(undefined),
       };
 

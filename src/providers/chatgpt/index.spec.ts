@@ -193,11 +193,18 @@ describe('ChatGPTProvider', () => {
             accessToken: 'test-token',
             sessionData: { expires: '2026-01-01T00:00:00Z' },
           })
-          // Second call: fetch conversations and projects
+          // Second call: fetch regular conversations page
           .mockResolvedValueOnce({
-            conversations: { items: mockConversations },
-            projects: null,
-          }),
+            items: mockConversations,
+            hasMore: false,
+          })
+          // Third call: fetch archived conversations page
+          .mockResolvedValueOnce({
+            items: [],
+            hasMore: false,
+          })
+          // Fourth call: fetch projects
+          .mockResolvedValueOnce(null),
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };
@@ -250,11 +257,18 @@ describe('ChatGPTProvider', () => {
             accessToken: 'test-token',
             sessionData: { expires: '2026-01-01T00:00:00Z' },
           })
-          // Second call: fetch conversations and projects
+          // Second call: fetch regular conversations page
           .mockResolvedValueOnce({
-            conversations: { items: mockConversations },
-            projects: null,
-          }),
+            items: mockConversations,
+            hasMore: false,
+          })
+          // Third call: fetch archived conversations page
+          .mockResolvedValueOnce({
+            items: [],
+            hasMore: false,
+          })
+          // Fourth call: fetch projects
+          .mockResolvedValueOnce(null),
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };
@@ -295,11 +309,18 @@ describe('ChatGPTProvider', () => {
             accessToken: 'test-token',
             sessionData: { expires: '2026-01-01T00:00:00Z' },
           })
-          // Second call: fetch conversations and projects
+          // Second call: fetch regular conversations page (simulates API returning limited results)
           .mockResolvedValueOnce({
-            conversations: { items: mockConversations.slice(0, 5) },
-            projects: null,
-          }),
+            items: mockConversations.slice(0, 5),
+            hasMore: false,
+          })
+          // Third call: fetch archived conversations page
+          .mockResolvedValueOnce({
+            items: [],
+            hasMore: false,
+          })
+          // Fourth call: fetch projects
+          .mockResolvedValueOnce(null),
         waitForTimeout: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };

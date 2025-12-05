@@ -68,6 +68,7 @@ describe('Archiver', () => {
       saveConversation: vi.fn().mockResolvedValue(undefined),
       conversationExists: vi.fn().mockResolvedValue(false),
       getConversation: vi.fn().mockResolvedValue(null),
+      getContentHash: vi.fn().mockResolvedValue(undefined),
       getStats: vi.fn().mockResolvedValue({
         totalConversations: 10,
         totalMessages: 50,
