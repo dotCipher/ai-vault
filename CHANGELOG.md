@@ -1,3 +1,9 @@
+## [3.2.2](https://github.com/dotCipher/ai-vault/compare/v3.2.1...v3.2.2) (2025-12-10)
+
+### Bug Fixes
+
+- prevent duplicate conversations in Claude provider pagination ([114996b](https://github.com/dotCipher/ai-vault/commit/114996b6c625e27733caf130f7cf906c8c7852f4))
+
 ## [3.2.1](https://github.com/dotCipher/ai-vault/compare/v3.2.0...v3.2.1) (2025-12-05)
 
 ### Bug Fixes
