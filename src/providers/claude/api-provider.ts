@@ -88,7 +88,9 @@ export class ClaudeApiProvider extends StrategyBasedProvider {
           const projectsUrl = `https://claude.ai/api/organizations/${orgId}/projects`;
 
           // Fetch all conversations with pagination
+          // Track seen UUIDs to detect when API returns duplicates (pagination cycling)
           const allConversations: any[] = [];
+          const seenUuids = new Set<string>();
           let page = 1;
           let hasMore = true;
 
@@ -114,9 +116,20 @@ export class ClaudeApiProvider extends StrategyBasedProvider {
               break;
             }
 
-            allConversations.push(...conversations);
+            // Check for duplicates - if we see any UUID we've already seen,
+            // the API is cycling back (pagination doesn't work as expected)
+            let foundDuplicate = false;
+            for (const conv of conversations) {
+              if (seenUuids.has(conv.uuid)) {
+                foundDuplicate = true;
+                break;
+              }
+              seenUuids.add(conv.uuid);
+              allConversations.push(conv);
+            }
 
-            hasMore = conversations.length === limit;
+            // Stop if we found duplicates (API cycled) or no more results
+            hasMore = conversations.length === limit && !foundDuplicate;
             if (requestedLimit && allConversations.length >= requestedLimit) {
               hasMore = false;
             }

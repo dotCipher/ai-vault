@@ -239,15 +239,29 @@ export class ClaudeProvider extends BaseProvider {
       const requestedLimit = options.limit;
 
       // Fetch conversations with pagination outside browser context
+      // Track seen UUIDs to detect when API returns duplicates (pagination cycling)
       const allConversations: any[] = [];
+      const seenUuids = new Set<string>();
       let pageNum = 1;
       let hasMore = true;
 
       while (hasMore) {
         const result = await this.fetchConversationPage(page, pageNum, pageSize);
-        allConversations.push(...result.items);
 
-        hasMore = result.hasMore;
+        // Check for duplicates - if we see any UUID we've already seen,
+        // the API is cycling back (pagination doesn't work as expected)
+        let foundDuplicate = false;
+        for (const item of result.items) {
+          if (seenUuids.has(item.uuid)) {
+            foundDuplicate = true;
+            break;
+          }
+          seenUuids.add(item.uuid);
+          allConversations.push(item);
+        }
+
+        // Stop if we found duplicates (API cycled) or no more results
+        hasMore = result.hasMore && !foundDuplicate;
         if (requestedLimit && allConversations.length >= requestedLimit) {
           hasMore = false;
         }
