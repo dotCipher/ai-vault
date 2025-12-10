@@ -47,6 +47,10 @@ export async function listCommand(options: ListOptions): Promise<void> {
     } catch (error: any) {
       spinner.fail('Authentication failed');
       console.error(chalk.red(error.message));
+      console.error(
+        chalk.yellow(`\nTo fix this, run: ${chalk.bold(`ai-vault setup ${providerName}`)}`)
+      );
+      console.error(chalk.gray('This will guide you through updating your session cookies.'));
       process.exit(1);
     }
 

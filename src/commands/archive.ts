@@ -256,13 +256,36 @@ async function loadProvider(providerName: string): Promise<Provider> {
 
     if (!isAuth) {
       spinner.stop('Authentication failed');
-      throw new Error('Could not authenticate. Check your credentials.');
+      console.log();
+      clack.log.error('Your session cookies appear to be expired or invalid.');
+      clack.log.info(
+        chalk.yellow(`To fix this, run: ${chalk.bold(`ai-vault setup ${providerName}`)}`)
+      );
+      clack.log.info(chalk.gray('This will guide you through updating your session cookies.'));
+      process.exit(1);
     }
 
     spinner.stop('✓ Authenticated');
-  } catch (error) {
+  } catch (error: any) {
     spinner.stop('Authentication failed');
-    throw error;
+    console.log();
+    clack.log.error(error.message || 'Unknown authentication error');
+
+    // Show helpful hint for auth-related errors
+    if (
+      error.message?.includes('401') ||
+      error.message?.includes('session') ||
+      error.message?.includes('cookies') ||
+      error.message?.includes('authentication') ||
+      error.message?.includes('unauthorized') ||
+      error.name === 'AuthenticationError'
+    ) {
+      clack.log.info(
+        chalk.yellow(`To fix this, run: ${chalk.bold(`ai-vault setup ${providerName}`)}`)
+      );
+      clack.log.info(chalk.gray('This will guide you through updating your session cookies.'));
+    }
+    process.exit(1);
   }
 
   return provider;

@@ -12,7 +12,10 @@ import { getProvider } from '../providers/index.js';
 
 interface SetupOptions {
   cookiesFile?: string;
+  provider?: string;
 }
+
+const VALID_PROVIDERS = ['grok-web', 'grok-x', 'chatgpt', 'claude'];
 
 export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   clack.intro(chalk.bold.blue('AI Vault Setup'));
@@ -25,24 +28,36 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     clack.log.info(`Currently configured: ${configuredProviders.join(', ')}`);
   }
 
-  // Select provider
-  const provider = await clack.select({
-    message: 'Which provider do you want to configure?',
-    options: [
-      { value: 'grok-web', label: 'Grok (grok.com)', hint: 'grok.com' },
-      { value: 'grok-x', label: 'Grok on X (x.com)', hint: 'x.com/grok' },
-      { value: 'chatgpt', label: 'ChatGPT (OpenAI)', hint: 'chatgpt.com' },
-      { value: 'claude', label: 'Claude (Anthropic)', hint: 'claude.ai' },
-    ],
-  });
+  let providerName: string;
 
-  if (clack.isCancel(provider)) {
-    clack.cancel('Setup cancelled');
-    process.exit(0);
+  // Use provider from argument if provided
+  if (options.provider) {
+    if (!VALID_PROVIDERS.includes(options.provider)) {
+      clack.log.error(`Invalid provider: ${options.provider}`);
+      clack.log.info(`Valid providers: ${VALID_PROVIDERS.join(', ')}`);
+      process.exit(1);
+    }
+    providerName = options.provider;
+    clack.log.info(`Configuring provider: ${providerName}`);
+  } else {
+    // Select provider interactively
+    const provider = await clack.select({
+      message: 'Which provider do you want to configure?',
+      options: [
+        { value: 'grok-web', label: 'Grok (grok.com)', hint: 'grok.com' },
+        { value: 'grok-x', label: 'Grok on X (x.com)', hint: 'x.com/grok' },
+        { value: 'chatgpt', label: 'ChatGPT (OpenAI)', hint: 'chatgpt.com' },
+        { value: 'claude', label: 'Claude (Anthropic)', hint: 'claude.ai' },
+      ],
+    });
+
+    if (clack.isCancel(provider)) {
+      clack.cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    providerName = provider as string;
   }
-
-  // Check which provider to configure
-  const providerName = provider as string;
 
   // Check if already configured
   if (await isProviderConfigured(providerName)) {

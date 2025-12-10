@@ -33,17 +33,18 @@ program
 program
   .command('setup')
   .description('Interactive setup wizard')
+  .argument('[provider]', 'Provider to setup (claude, chatgpt, grok-web, etc.)')
   .option('--cookies-file <path>', 'Path to cookies JSON file (for cookie-based auth)')
-  .action(async (options) => {
+  .action(async (provider, options) => {
     const { setupCommand } = await import('./commands/setup.js');
-    await setupCommand(options);
+    await setupCommand({ ...options, provider });
   });
 
 program
   .command('backup')
   .alias('archive')
   .description('Backup conversations from configured providers')
-  .option('-p, --provider <provider>', 'Specific provider to backup')
+  .argument('[provider]', 'Provider to backup (claude, chatgpt, grok-web, etc.)')
   .option('-o, --output <directory>', 'Output directory (overrides config)')
   .option('--since <date>', 'Backup conversations since date (YYYY-MM-DD)')
   .option('--until <date>', 'Backup conversations until date (YYYY-MM-DD)')
@@ -53,7 +54,7 @@ program
   .option('--ids <ids...>', 'Specific conversation IDs to backup')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--schedule-id <id>', 'Internal: schedule ID for tracking (used by scheduler)')
-  .action(async (options) => {
+  .action(async (provider, options) => {
     // Show deprecation warning if using 'archive' alias
     const command = program.args[0];
     if (command === 'archive') {
@@ -65,7 +66,7 @@ program
 
     const { archiveCommand } = await import('./commands/archive.js');
     await archiveCommand({
-      provider: options.provider,
+      provider,
       outputDir: options.output,
       since: options.since,
       until: options.until,
@@ -81,60 +82,57 @@ program
 program
   .command('import')
   .description('Import conversations from native platform exports')
-  .option(
-    '-p, --provider <provider>',
-    'Provider (grok, chatgpt, claude) - auto-detected if omitted'
-  )
-  .requiredOption('-f, --file <path>', 'Path to export file or directory')
+  .argument('[provider]', 'Provider (grok, chatgpt, claude) - auto-detected if omitted')
+  .argument('<file>', 'Path to export file or directory')
   .option('-o, --output <directory>', 'Output directory (overrides config)')
   .option('-y, --yes', 'Skip confirmation prompt')
-  .action(async (options) => {
+  .action(async (provider, file, options) => {
     const { importCommand } = await import('./commands/import.js');
-    await importCommand(options);
+    await importCommand({ ...options, provider, file });
   });
 
 program
   .command('status')
   .description('Show sync status - compare remote conversations with local archive')
-  .option('-p, --provider <provider>', 'Provider to check (grok-web, chatgpt, etc.)')
+  .argument('[provider]', 'Provider to check (claude, chatgpt, grok-web, etc.)')
   .option('--since <date>', 'Check conversations since date (YYYY-MM-DD)')
   .option('--until <date>', 'Check conversations until date (YYYY-MM-DD)')
   .option('--limit <number>', 'Maximum number of conversations to check')
-  .action(async (options) => {
+  .action(async (provider, options) => {
     const { statusCommand } = await import('./commands/status.js');
-    await statusCommand(options);
+    await statusCommand({ ...options, provider });
   });
 
 program
   .command('list')
   .description('[DEPRECATED: use "status" instead] List conversations from providers')
-  .option('-p, --provider <provider>', 'Provider to list from (grok-web, grok-x, etc.)')
+  .argument('[provider]', 'Provider to list from (claude, chatgpt, grok-web, etc.)')
   .option('--search <query>', 'Search conversations by title or preview')
   .option('--since <date>', 'List conversations since date (YYYY-MM-DD)')
   .option('--until <date>', 'List conversations until date (YYYY-MM-DD)')
   .option('--limit <number>', 'Maximum number of conversations to list')
-  .action(async (options) => {
+  .action(async (provider, options) => {
     const { listCommand } = await import('./commands/list.js');
-    await listCommand(options);
+    await listCommand({ ...options, provider });
   });
 
 program
   .command('schedule')
   .description('Manage automated backup schedules')
   .argument('[action]', 'Action: add, list, remove, enable, disable, status')
+  .argument('[provider]', 'Provider to schedule (for add action)')
   .option('--id <id>', 'Schedule ID (for remove/enable/disable)')
-  .option('-p, --provider <provider>', 'Provider to schedule')
   .option('--cron <expression>', 'Cron expression (e.g., "0 2 * * *")')
   .option('--description <text>', 'Schedule description')
   .option('--limit <number>', 'Maximum conversations to backup per run')
   .option('--since-days <days>', 'Only backup conversations from last N days')
   .option('--skip-media', 'Skip downloading media files')
-  .action(async (action, options) => {
+  .action(async (action, provider, options) => {
     const { scheduleCommand } = await import('./commands/schedule.js');
     await scheduleCommand({
       action: action || 'list',
       id: options.id,
-      provider: options.provider,
+      provider,
       cron: options.cron,
       description: options.description,
       limit: options.limit,
