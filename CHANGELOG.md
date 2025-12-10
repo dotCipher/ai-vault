@@ -1,3 +1,9 @@
+# [3.3.0](https://github.com/dotCipher/ai-vault/compare/v3.2.2...v3.3.0) (2025-12-10)
+
+### Features
+
+- improve CLI UX with positional args and auth failure guidance ([d1e8fe7](https://github.com/dotCipher/ai-vault/commit/d1e8fe72a6935608abf7b08ab5ad99916818684c))
+
 ## [3.2.2](https://github.com/dotCipher/ai-vault/compare/v3.2.1...v3.2.2) (2025-12-10)
 
 ### Bug Fixes
