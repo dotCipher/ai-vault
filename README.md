@@ -13,7 +13,7 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 **AI Vault** gives you back complete control with:
 
 - 🔄 **Automated daily backups** - Set it and forget it
-- 🎯 **Smart targeting** - Archive what matters, skip the noise
+- 🎯 **Smart targeting** - Backup what matters, skip the noise
 - 📦 **Multi-platform support** - ChatGPT, Claude, Grok, Gemini, and more
 - 🖼️ **Complete media preservation** - Images, videos, diagrams, code artifacts with intelligent deduplication
 - 📝 **Full conversation history** - Every message, timestamp, metadata, and context
@@ -22,18 +22,18 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 
 ---
 
-> ### 🏆 **Archive > Export**
+> ### 🏆 **Backup > Export**
 >
-> **Our archive feature can capture MORE data than some providers' native exports.**
+> **Our backup feature can capture MORE data than some providers' native exports.**
 >
-> In benchmarks performed November 2025, we found that AI Vault's archive functionality retrieved **5x more media files** (166 vs 33) compared to a major provider's official export feature. While native exports are useful for quick imports, our live archiving directly from APIs ensures you get:
+> In benchmarks performed November 2025, we found that AI Vault's backup functionality retrieved **5x more media files** (166 vs 33) compared to a major provider's official export feature. While native exports are useful for quick imports, our live backups directly from APIs ensure you get:
 >
 > - ✅ Complete media libraries (all images, files, and generated content)
 > - ✅ Real-time metadata and conversation state
 > - ✅ Workspace/project hierarchy information
 > - ✅ Assets that may not be included in ZIP exports
 >
-> **Recommendation:** Use `archive` for comprehensive backups, `import` for quick migration from official exports.
+> **Recommendation:** Use `backup` for comprehensive backups, `import` for quick migration from official exports.
 
 ---
 
@@ -46,7 +46,7 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 | **Grok (grok.com)** | ✅ Complete | ✅            | ✅          | ✅             |
 | **Grok on X**       | ✅ Complete | ❌            | ✅          | ✅             |
 | **ChatGPT**         | ✅ Complete | ✅            | ✅          | ✅             |
-| **Claude**          | 📋 Planned  | ✅            | ✅          | ✅             |
+| **Claude**          | ✅ Complete | ✅            | ✅          | ✅             |
 | **Gemini**          | 📋 Planned  | ✅            | ✅          | ✅             |
 | **Perplexity**      | 📋 Planned  | ❌            | ✅          | ✅             |
 
@@ -61,14 +61,14 @@ Your AI interactions are valuable assets. They contain your thoughts, research, 
 - **Complete Media Preservation** - Downloads images, DALL-E generations, videos, and documents
   - _Note: Audio from voice conversations is not available through most provider APIs (e.g., Grok, ChatGPT)_
 - **Hierarchical Organization** - Platform-agnostic workspace/project tracking with automatic disk reorganization when conversations move
-- **Smart Diff Archiving** - Automatically detects and re-archives updated conversations via timestamp comparison
+- **Smart Diff Backups** - Automatically detects and re-downloads updated conversations via timestamp comparison
 - **Incremental Backups** - Only fetch new/updated conversations, skip unchanged ones
-- **Status Checking** - Preview what's new, updated, or moved before archiving
+- **Status Checking** - Preview what's new, updated, or moved before backing up
 - **Media Deduplication** - SHA-256 based deduplication prevents storing the same media twice
 - **Flexible Scheduling** - Daily, weekly, or custom cron expressions (native OS schedulers, no daemon required)
 - **Rich Export Formats** - JSON + Markdown for maximum compatibility and portability
 - **Filtering & Targeting** - Date ranges, search queries, conversation limits, specific conversation IDs
-- **Provider-Specific Features** - Assets library archiving (Grok), workspace/project metadata (Grok, ChatGPT)
+- **Provider-Specific Features** - Assets library backup (Grok), workspace/project metadata (Grok, ChatGPT, Claude)
 
 ## 📦 Installation
 
@@ -185,20 +185,17 @@ rmdir /s %USERPROFILE%\ai-vault-data
 ai-vault setup
 
 # Option 1: Import from native export (fastest way to start)
-ai-vault import --provider grok-web --file ~/Downloads/grok-export/ --yes
+ai-vault import ~/Downloads/grok-export/ --yes
 
-# Option 2: Archive via automated scraping
+# Option 2: Backup via automated scraping
 # Check what's new or updated first
 ai-vault status
 
-# Archive all new and updated conversations
-ai-vault archive
+# Backup all new and updated conversations
+ai-vault backup
 
 # Schedule automated backups
 ai-vault schedule add
-
-# List archived conversations
-ai-vault list
 
 # Check for updates
 ai-vault upgrade
@@ -209,84 +206,93 @@ ai-vault upgrade
 ### Setup
 
 ```bash
-# Interactive setup
+# Interactive setup (choose provider interactively)
 ai-vault setup
 
+# Setup specific provider directly
+ai-vault setup claude
+ai-vault setup chatgpt
+ai-vault setup grok-web
+
 # Setup with cookies from file (easier for cookie-based auth)
-ai-vault setup --cookies-file ~/Downloads/cookies.json
+ai-vault setup claude --cookies-file ~/Downloads/cookies.json
 ```
 
 **For cookie-based authentication:**
 
 1. Go to the provider's website and log in:
+   - **claude**: claude.ai
+   - **chatgpt**: chatgpt.com
    - **grok-web**: grok.com
    - **grok-x**: x.com/grok
-   - **chatgpt**: chatgpt.com
 2. Open Chrome DevTools (F12 or Cmd+Option+I)
 3. Go to Application tab → Cookies → Select the site
 4. Copy the cookie values you need (varies by provider)
-5. Run `ai-vault setup` and enter cookies when prompted
+5. Run `ai-vault setup <provider>` and enter cookies when prompted
 
-Alternatively, you can export cookies to a JSON file and use `ai-vault setup --cookies-file <path>`
+Alternatively, you can export cookies to a JSON file and use `ai-vault setup <provider> --cookies-file <path>`
 
 The interactive wizard will:
 
-1. Choose which AI platforms to archive
+1. Choose which AI platforms to backup (or specify directly)
 2. Configure authentication (API keys or browser cookies)
 3. Set your archive directory (default: `~/ai-vault-data`)
 4. Test your connection
 
-### Archive Now
+### Backup Now
 
 ```bash
-# Archive all configured platforms
-ai-vault archive
+# Backup all configured platforms
+ai-vault backup
 
-# Archive specific platform
-ai-vault archive --provider grok-web
+# Backup specific platform
+ai-vault backup claude
+ai-vault backup chatgpt
+ai-vault backup grok-web
 
-# Archive with date filter
-ai-vault archive --since 2025-01-01
+# Backup with date filter
+ai-vault backup claude --since 2025-01-01
 
-# Archive with custom output directory
-ai-vault archive --output ~/Dropbox/AI-Backups
-ai-vault archive -o /mnt/external/backups
+# Backup with custom output directory
+ai-vault backup --output ~/Dropbox/AI-Backups
+ai-vault backup -o /mnt/external/backups
 
 # Limit number of conversations
-ai-vault archive --limit 10
+ai-vault backup --limit 10
 
 # Skip media downloads (faster, text only)
-ai-vault archive --skip-media
+ai-vault backup --skip-media
 
-# Dry run (see what would be archived)
-ai-vault archive --dry-run
+# Dry run (see what would be backed up)
+ai-vault backup --dry-run
 ```
 
 **Performance**: AI Vault automatically uses parallel processing with smart concurrency based on your hardware and provider constraints. Typical performance is 3-10x faster than sequential processing.
 
-### Check Archive Status
+### Check Backup Status
 
-Preview what's new or updated before archiving:
+Preview what's new or updated before backing up:
 
 ```bash
 # Check status for all configured platforms
 ai-vault status
 
 # Check specific platform
-ai-vault status --provider chatgpt
+ai-vault status claude
+ai-vault status chatgpt
 
 # Check with filters
-ai-vault status --since 2025-01-01 --limit 50
+ai-vault status claude --since 2025-01-01 --limit 50
 ```
 
 The status command shows:
 
-- **New conversations** not yet archived (marked with +)
-- **Updated conversations** that changed remotely since last archive (marked with ○)
+- **New conversations** not yet backed up (marked with +)
+- **Updated conversations** that changed remotely since last backup (marked with ○)
 - **Hierarchy changes** conversations moved between workspaces/projects (marked with →)
-- **Already archived** conversations that are up-to-date (marked with ✓)
+- **Already backed up** conversations that are up-to-date (marked with ✓)
 
-This helps you preview what will be downloaded before running `ai-vault archive`.
+This helps you preview what will be downloaded before running `ai-vault backup`.
 
 ### Import from Native Exports
 
@@ -294,33 +300,33 @@ Many platforms offer one-time data exports. AI Vault can import these and conver
 
 ```bash
 # Auto-detect provider from export (recommended)
-ai-vault import --file ~/Downloads/chatgpt-export.zip --yes
+ai-vault import ~/Downloads/chatgpt-export.zip --yes
 
 # Import from unpacked directory
-ai-vault import --file ~/Downloads/grok-export/
+ai-vault import ~/Downloads/grok-export/
 
 # Import with custom output directory
-ai-vault import --file ~/Downloads/export.zip --output ~/Dropbox/AI-Backups
+ai-vault import ~/Downloads/export.zip --output ~/Dropbox/AI-Backups
 
-# Manually specify provider (optional)
-ai-vault import --provider grok-web --file ~/Downloads/grok-export/
+# Manually specify provider (optional, auto-detected if omitted)
+ai-vault import grok-web ~/Downloads/grok-export/
 
 # Skip confirmation prompt
-ai-vault import --file ~/Downloads/export.zip --yes
+ai-vault import ~/Downloads/export.zip --yes
 ```
 
 **Supported import formats:**
 
+- **Claude**: Export from claude.ai → Settings → Account → Export Data
+  - Supports ZIP files and unpacked directories
+  - Imports conversations and project metadata
 - **ChatGPT**: Export from settings → Data controls → Export data
   - Supports ZIP files and unpacked directories
   - Automatically imports all media (images, DALL-E generations, audio)
   - Provider auto-detected from `conversations.json`
 - **Grok (grok.com)**: Export from grok.com → Profile → Data & Privacy → Download your data
-  - Use `--provider grok-web` for standalone Grok conversations
   - Supports ZIP files and unpacked directories
 - **Grok on X**: Export from x.com/grok (if available)
-  - Use `--provider grok-x` for X-integrated Grok conversations
-- **Claude**: _(coming soon)_ Export from settings
 
 ### Schedule Automated Backups
 
@@ -330,8 +336,8 @@ AI Vault uses native OS schedulers (cron on Unix, Task Scheduler on Windows) for
 # Add a new schedule (interactive)
 ai-vault schedule add
 
-# Add schedule with options
-ai-vault schedule add --provider grok-web --cron "0 2 * * *" --description "Daily Grok backup"
+# Add schedule for specific provider
+ai-vault schedule add claude --cron "0 2 * * *" --description "Daily Claude backup"
 
 # List all schedules
 ai-vault schedule list
@@ -349,8 +355,7 @@ ai-vault schedule enable --id abc123
 ai-vault schedule disable --id abc123
 
 # Advanced options
-ai-vault schedule add \
-  --provider grok-web \
+ai-vault schedule add claude \
   --cron "0 */6 * * *" \
   --limit 100 \
   --since-days 7 \
@@ -361,22 +366,23 @@ ai-vault schedule add \
 
 - `--cron`: Cron expression (e.g., `"0 2 * * *"` for daily at 2 AM)
 - `--limit`: Maximum conversations per run
-- `--since-days`: Only archive conversations from last N days
+- `--since-days`: Only backup conversations from last N days
 - `--skip-media`: Skip downloading media files
 
 **Logs:** Scheduled runs write logs to `~/.ai-vault/logs/<schedule-id>.log`
 
-### List Archived Conversations
+### List Backed Up Conversations
 
 ```bash
-# List all archived conversations
+# List all backed up conversations
 ai-vault list
 
 # Filter by provider
-ai-vault list --provider chatgpt
+ai-vault list claude
+ai-vault list chatgpt
 
 # Search by keyword
-ai-vault list --search "machine learning"
+ai-vault list claude --search "machine learning"
 ```
 
 ## ⚙️ Configuration
@@ -403,7 +409,7 @@ ai-vault list --search "machine learning"
 }
 ```
 
-**Default archive directory:** `~/ai-vault-data`
+**Default backup directory:** `~/ai-vault-data`
 
 ```
 ~/ai-vault-data/
@@ -472,20 +478,20 @@ ai-vault list --search "machine learning"
 
 - **Grok (grok-web)**: ✅ Full workspace and project tracking
 - **ChatGPT**: ✅ Project tracking
+- **Claude**: ✅ Project tracking
 - **Grok on X (grok-x)**: ❌ No hierarchy (flat structure)
-- **Claude**: 📋 Planned
 - **Gemini**: 📋 Planned
 - **Perplexity**: 📋 Planned
 
-### Customizing Archive Directory
+### Customizing Backup Directory
 
 **Three ways to set the output directory** (in priority order):
 
 1. **CLI option** (per-command override):
 
    ```bash
-   ai-vault archive --output ~/Dropbox/AI-Backups
-   ai-vault archive -o /mnt/external/backups
+   ai-vault backup --output ~/Dropbox/AI-Backups
+   ai-vault backup -o /mnt/external/backups
    ```
 
 2. **Config file** (persistent setting):
@@ -494,7 +500,7 @@ ai-vault list --search "machine learning"
    ```json
    {
      "settings": {
-       "archiveDir": "~/Documents/my-ai-archives"
+       "archiveDir": "~/Documents/my-ai-backups"
      }
    }
    ```
@@ -591,19 +597,24 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
   - [x] **Web scraping**: Cookie-based authentication via backend API
   - [x] **Media support**: Images (uploaded & DALL-E), videos, documents
   - [x] **Backend API integration**: Reliable conversation fetching with full attachment metadata
-  - [x] **Automatic unarchiving**: Automatically unarchives archived conversations during archiving to ensure complete backup coverage
+  - [x] **Automatic unarchiving**: Automatically unarchives archived conversations during backup to ensure complete coverage
   - [x] **Comprehensive media coverage**: 96.1% media coverage with bearer token auth, pagination, and two-step downloads
   - [x] **Image detection**: Full support for image_asset_pointer content type (DALL-E, uploads, screenshots)
   - [x] **Pagination**: Fetches all conversations beyond 100-item API limit
+- [x] Claude provider:
+  - [x] **Native import**: From official claude.ai exports
+  - [x] **Web scraping**: Cookie-based authentication via backend API
+  - [x] **Project support**: Full project/workspace hierarchy tracking
+  - [x] **Artifact support**: Preserves code artifacts and attachments
 - [x] Smart filtering system:
   - [x] Date range filtering (since/until)
   - [x] Search query filtering (title/preview)
   - [x] Conversation limit controls
-  - [x] List command for browsing before archiving
-  - [x] Status command for previewing changes before archiving
-- [x] Smart diff archiving:
+  - [x] List command for browsing before backing up
+  - [x] Status command for previewing changes before backing up
+- [x] Smart diff backups:
   - [x] Timestamp-based change detection (platform-agnostic)
-  - [x] Automatic re-archiving of updated conversations
+  - [x] Automatic re-download of updated conversations
   - [x] Skip unchanged conversations for efficiency
   - [x] 1-second tolerance for timestamp rounding
 - [x] Scheduling system:
@@ -621,7 +632,6 @@ See [docs/providers.md](docs/providers.md) for a detailed guide.
 ### In Progress 🚧
 
 - [ ] Additional provider implementations:
-  - [ ] Claude provider (import + scraping)
   - [ ] Gemini provider (import + scraping)
   - [ ] Perplexity provider (scraping)
 
