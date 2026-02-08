@@ -31,7 +31,8 @@ export interface CliUI {
   confirm(options: { message: string }): Promise<boolean>;
   select<T extends string>(options: {
     message: string;
-    options: Array<{ value: T; label: string }>;
+    options: Array<{ value: T; label: string; hint?: string; disabled?: boolean }>;
+    initialValue?: T;
   }): Promise<T>;
   spinner(): Spinner;
 }
@@ -85,8 +86,60 @@ export function createCliUI(): CliUI {
         step: (message) => clack.log.step(message),
       },
       confirm: (options) => clack.confirm(options) as Promise<boolean>,
-      select: (options) => clack.select(options) as Promise<any>,
-      spinner: () => clack.spinner() as Spinner,
+      select: (options) => clack.select(options as any) as Promise<any>,
+      spinner: () => {
+        const spin = clack.spinner();
+        const wrapper: Spinner = {
+          start: (text?: string) => {
+            if (text) {
+              spin.start(text);
+            } else {
+              spin.start();
+            }
+            return wrapper;
+          },
+          stop: (text?: string) => {
+            if (text) {
+              spin.stop(text);
+            } else {
+              spin.stop();
+            }
+          },
+          succeed: (text?: string) => {
+            if ((spin as any).succeed) {
+              (spin as any).succeed(text);
+            } else {
+              spin.stop(text);
+            }
+          },
+          fail: (text?: string) => {
+            if ((spin as any).fail) {
+              (spin as any).fail(text);
+            } else {
+              spin.stop(text);
+            }
+          },
+          warn: (text?: string) => {
+            if ((spin as any).warn) {
+              (spin as any).warn(text);
+            } else {
+              spin.stop(text);
+            }
+          },
+          get text() {
+            return undefined;
+          },
+          set text(value: string | undefined) {
+            if (!value) return;
+            if ((spin as any).message) {
+              (spin as any).message(value);
+            } else {
+              spin.stop(value);
+            }
+          },
+        };
+        return wrapper;
+      },
     };
   }
 

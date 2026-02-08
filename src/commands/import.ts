@@ -189,7 +189,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
       try {
         await storage.saveConversation(conversation);
         imported++;
-        spinner.message(`Imported ${imported}/${conversations.length}...`);
+        spinner.text = `Imported ${imported}/${conversations.length}...`;
       } catch (error) {
         errors++;
         console.error(`Failed to save conversation ${conversation.id}:`, error);
