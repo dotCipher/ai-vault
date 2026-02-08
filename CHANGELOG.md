@@ -1,3 +1,13 @@
+# [3.4.0](https://github.com/dotCipher/ai-vault/compare/v3.3.0...v3.4.0) (2026-02-08)
+
+### Bug Fixes
+
+- resolve build errors ([e66b77d](https://github.com/dotCipher/ai-vault/commit/e66b77d0404b08c393b3ac54f960aa8fd1a8ec9d))
+
+### Features
+
+- improve backup verification and claude errors ([8667096](https://github.com/dotCipher/ai-vault/commit/8667096da21749af108bf7eb980889ea926da671))
+
 # [3.3.0](https://github.com/dotCipher/ai-vault/compare/v3.2.2...v3.3.0) (2025-12-10)
 
 ### Features
