@@ -22,7 +22,7 @@ async function ensurePlaywrightBrowsers(): Promise<void> {
   } catch {
     console.log('[INFO] Playwright browsers not found, installing...');
     try {
-      execSync('npx playwright install chromium firefox', {
+      execSync('npx -y playwright install chromium firefox', {
         stdio: 'inherit',
         timeout: 300000, // 5 minute timeout
       });

@@ -2,13 +2,14 @@
  * Setup Command - Interactive provider configuration
  */
 
-import * as clack from '@clack/prompts';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { saveProviderConfig, loadConfig, isProviderConfigured } from '../utils/config.js';
 import type { ProviderConfig } from '../types/index.js';
 import { getProvider } from '../providers/index.js';
+import { createCliUI } from '../utils/cli-ui.js';
+import * as clack from '@clack/prompts';
 
 interface SetupOptions {
   cookiesFile?: string;
@@ -18,14 +19,15 @@ interface SetupOptions {
 const VALID_PROVIDERS = ['grok-web', 'grok-x', 'chatgpt', 'claude'];
 
 export async function setupCommand(options: SetupOptions = {}): Promise<void> {
-  clack.intro(chalk.bold.blue('AI Vault Setup'));
+  const ui = createCliUI();
+  ui.intro(chalk.bold.blue('AI Vault Setup'));
 
   // Check existing configuration
   const config = await loadConfig();
   const configuredProviders = Object.keys(config.providers);
 
   if (configuredProviders.length > 0) {
-    clack.log.info(`Currently configured: ${configuredProviders.join(', ')}`);
+    ui.log.info(`Currently configured: ${configuredProviders.join(', ')}`);
   }
 
   let providerName: string;
@@ -33,13 +35,17 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   // Use provider from argument if provided
   if (options.provider) {
     if (!VALID_PROVIDERS.includes(options.provider)) {
-      clack.log.error(`Invalid provider: ${options.provider}`);
-      clack.log.info(`Valid providers: ${VALID_PROVIDERS.join(', ')}`);
+      ui.log.error(`Invalid provider: ${options.provider}`);
+      ui.log.info(`Valid providers: ${VALID_PROVIDERS.join(', ')}`);
       process.exit(1);
     }
     providerName = options.provider;
-    clack.log.info(`Configuring provider: ${providerName}`);
+    ui.log.info(`Configuring provider: ${providerName}`);
   } else {
+    if (!ui.isInteractive) {
+      ui.log.error('Provider selection requires a TTY. Pass a provider name explicitly.');
+      process.exit(1);
+    }
     // Select provider interactively
     const provider = await clack.select({
       message: 'Which provider do you want to configure?',
@@ -52,7 +58,7 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
     });
 
     if (clack.isCancel(provider)) {
-      clack.cancel('Setup cancelled');
+      ui.cancel('Setup cancelled');
       process.exit(0);
     }
 
@@ -61,13 +67,23 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
 
   // Check if already configured
   if (await isProviderConfigured(providerName)) {
-    const overwrite = await clack.confirm({
-      message: `${providerName} is already configured. Overwrite?`,
-    });
+    if (!ui.isInteractive) {
+      if (!options.cookiesFile) {
+        ui.log.error(
+          `${providerName} is already configured. Run setup in a TTY to overwrite or pass --cookies-file.`
+        );
+        process.exit(1);
+      }
+      ui.log.warn(`${providerName} is already configured. Overwriting with provided cookies file.`);
+    } else {
+      const overwrite = await clack.confirm({
+        message: `${providerName} is already configured. Overwrite?`,
+      });
 
-    if (clack.isCancel(overwrite) || !overwrite) {
-      clack.cancel('Setup cancelled');
-      process.exit(0);
+      if (clack.isCancel(overwrite) || !overwrite) {
+        ui.cancel('Setup cancelled');
+        process.exit(0);
+      }
     }
   }
 
@@ -84,23 +100,28 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
       await setupClaude(options);
       break;
     default:
-      clack.log.error(`${providerName} provider is not yet implemented`);
+      ui.log.error(`${providerName} provider is not yet implemented`);
       process.exit(1);
   }
 
-  clack.outro(chalk.green('✓ Setup complete! Run `ai-vault archive` to start archiving.'));
+  ui.outro(chalk.green('✓ Setup complete! Run `ai-vault archive` to start archiving.'));
 }
 
 async function setupGrok(providerName: string, options: SetupOptions): Promise<void> {
+  const ui = createCliUI();
   const displayName = providerName === 'grok-web' ? 'Grok (grok.com)' : 'Grok on X (x.com/grok)';
-  clack.log.step(`Configuring ${displayName}`);
+  ui.log.step(`Configuring ${displayName}`);
 
   // If cookies file provided, skip to cookie auth
   let authMethod: string;
   if (options.cookiesFile) {
     authMethod = 'cookies';
-    clack.log.info(`Using cookies from file: ${options.cookiesFile}`);
+    ui.log.info(`Using cookies from file: ${options.cookiesFile}`);
   } else {
+    if (!ui.isInteractive) {
+      ui.log.error('Interactive auth selection requires a TTY. Pass --cookies-file.');
+      process.exit(1);
+    }
     // Choose auth method
     const selected = await clack.select({
       message: 'Authentication method:',
@@ -111,7 +132,7 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
     });
 
     if (clack.isCancel(selected)) {
-      clack.cancel('Setup cancelled');
+      ui.cancel('Setup cancelled');
       process.exit(0);
     }
 
@@ -169,21 +190,25 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
           cookies = parsed;
         }
 
-        clack.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
+        ui.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
       } catch (error) {
-        clack.log.error(
+        ui.log.error(
           `Failed to read cookies file: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         process.exit(1);
       }
     } else {
+      if (!ui.isInteractive) {
+        ui.log.error('Interactive cookie entry requires a TTY. Pass --cookies-file.');
+        process.exit(1);
+      }
       // Interactive prompt for each cookie
       const websiteUrl = providerName === 'grok-web' ? 'grok.com' : 'x.com/grok';
-      clack.log.info(`To get cookies from ${displayName}:`);
-      clack.log.info(`1. Open ${websiteUrl} in your browser and log in`);
-      clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
-      clack.log.info(`3. Go to Application → Cookies → https://${websiteUrl.split('/')[0]}`);
-      clack.log.info('4. Find each cookie below and copy its VALUE');
+      ui.log.info(`To get cookies from ${displayName}:`);
+      ui.log.info(`1. Open ${websiteUrl} in your browser and log in`);
+      ui.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
+      ui.log.info(`3. Go to Application → Cookies → https://${websiteUrl.split('/')[0]}`);
+      ui.log.info('4. Find each cookie below and copy its VALUE');
       console.log();
 
       cookies = {};
@@ -204,7 +229,7 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       });
 
       if (clack.isCancel(ssoValue)) {
-        clack.cancel('Setup cancelled');
+        ui.cancel('Setup cancelled');
         process.exit(0);
       }
 
@@ -228,7 +253,7 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       });
 
       if (clack.isCancel(ssoRwValue)) {
-        clack.cancel('Setup cancelled');
+        ui.cancel('Setup cancelled');
         process.exit(0);
       }
 
@@ -237,7 +262,7 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       cookies['sso-rw'] = ssoRwTrimmed.length > 0 ? ssoRwTrimmed : cookies['sso'];
 
       if (ssoRwTrimmed.length === 0) {
-        clack.log.info('Using same value as "sso" for "sso-rw"');
+        ui.log.info('Using same value as "sso" for "sso-rw"');
       }
 
       // Prompt for stblid cookie
@@ -257,13 +282,13 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       });
 
       if (clack.isCancel(stblidValue)) {
-        clack.cancel('Setup cancelled');
+        ui.cancel('Setup cancelled');
         process.exit(0);
       }
 
       cookies['stblid'] = (stblidValue as string).trim();
 
-      clack.log.success('All cookies collected successfully!');
+      ui.log.success('All cookies collected successfully!');
     }
 
     providerConfig = {
@@ -274,7 +299,7 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
   }
 
   // Test authentication
-  const spinner = clack.spinner();
+  const spinner = ui.spinner();
   spinner.start('Testing authentication...');
 
   try {
@@ -285,25 +310,29 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
 
     if (!isAuth) {
       spinner.stop('Authentication failed');
-      clack.log.error('Could not authenticate with provided credentials');
+      ui.log.error('Could not authenticate with provided credentials');
       process.exit(1);
     }
 
     spinner.stop('✓ Authentication successful!');
   } catch (error) {
     spinner.stop('Authentication failed');
-    clack.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    ui.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
     process.exit(1);
   }
 
   // Save configuration
   await saveProviderConfig(providerConfig);
-  clack.log.success('Configuration saved to ~/.ai-vault/config.json');
+  ui.log.success('Configuration saved to ~/.ai-vault/config.json');
 
   // Configure archive directory
   const config = await loadConfig();
   if (!config.settings?.archiveDir) {
     console.log();
+    if (!ui.isInteractive) {
+      ui.log.info('Using default archive directory (~/ai-vault-data)');
+      return;
+    }
     const customDir = await clack.text({
       message: 'Archive directory (press Enter for default):',
       placeholder: '~/ai-vault-data',
@@ -314,13 +343,14 @@ async function setupGrok(providerName: string, options: SetupOptions): Promise<v
       config.settings.archiveDir = customDir as string;
       const { saveConfig } = await import('../utils/config.js');
       await saveConfig(config);
-      clack.log.info(`Archive directory set to: ${customDir}`);
+      ui.log.info(`Archive directory set to: ${customDir}`);
     }
   }
 }
 
 async function setupChatGPT(options: SetupOptions): Promise<void> {
-  clack.log.step('Configuring ChatGPT (OpenAI)');
+  const ui = createCliUI();
+  ui.log.step('Configuring ChatGPT (OpenAI)');
 
   let cookies: Record<string, string>;
 
@@ -339,34 +369,28 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
         cookies = parsed;
       }
 
-      clack.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
+      ui.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
     } catch (error) {
-      clack.log.error(
+      ui.log.error(
         `Failed to read cookies file: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       process.exit(1);
     }
   } else {
+    if (!ui.isInteractive) {
+      ui.log.error('Interactive cookie entry requires a TTY. Pass --cookies-file.');
+      process.exit(1);
+    }
     // Interactive prompt for each cookie
-    clack.log.info('To get cookies from ChatGPT:');
-    clack.log.info('1. Open chatgpt.com in your browser and log in');
-    clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
-    clack.log.info('3. Go to Application → Cookies → https://chatgpt.com');
-    clack.log.info('4. Find the cookies below and copy their VALUES');
-    clack.log.info('');
-    clack.log.warn('⚠️  Important: Some cookies may not be present for all users.');
-    clack.log.warn('   Press Enter to skip optional cookies.');
+    ui.log.info('To get cookies from ChatGPT:');
+    ui.log.info('1. Open chatgpt.com in your browser and log in');
+    ui.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
+    ui.log.info('3. Go to Application → Cookies → https://chatgpt.com');
+    ui.log.info('4. Find the cookies below and copy their VALUES');
+    ui.log.info('');
+    ui.log.warn('⚠️  Important: Some cookies may not be present for all users.');
+    ui.log.warn('   Press Enter to skip optional cookies.');
     console.log();
-
-    // Define required cookies for ChatGPT
-    const requiredCookies = [
-      {
-        name: '__Secure-next-auth.session-token',
-        description: 'Session token (REQUIRED)',
-        hint: 'Long JWT-like token',
-        required: true,
-      },
-    ];
 
     const optionalCookies = [
       {
@@ -385,25 +409,60 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
 
     cookies = {};
 
-    // Prompt for required cookies
-    for (const cookieInfo of requiredCookies) {
-      const value = await clack.text({
-        message: `Enter value for cookie "${cookieInfo.name}" (${cookieInfo.description}):`,
-        placeholder: cookieInfo.hint,
-        validate: (val) => {
-          if (!val || val.trim().length === 0) {
-            return `${cookieInfo.name} is required`;
-          }
-          return undefined;
-        },
-      });
+    ui.log.warn('   Some accounts now split the session token into .0 and .1 cookies.');
+    ui.log.warn('   Provide either the single session token or both .0 and .1 parts.');
+    console.log();
 
-      if (clack.isCancel(value)) {
-        clack.cancel('Setup cancelled');
-        process.exit(0);
-      }
+    const baseTokenValue = await clack.text({
+      message:
+        'Enter value for cookie "__Secure-next-auth.session-token" (optional if using .0/.1):',
+      placeholder: 'Long JWT-like token - press Enter to use .0/.1 cookies',
+    });
 
-      cookies[cookieInfo.name] = (value as string).trim();
+    if (clack.isCancel(baseTokenValue)) {
+      ui.cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    const tokenPart0Value = await clack.text({
+      message: 'Enter value for cookie "__Secure-next-auth.session-token.0" (optional):',
+      placeholder: 'First chunk - press Enter to skip if not found',
+    });
+
+    if (clack.isCancel(tokenPart0Value)) {
+      ui.cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    const tokenPart1Value = await clack.text({
+      message: 'Enter value for cookie "__Secure-next-auth.session-token.1" (optional):',
+      placeholder: 'Second chunk - press Enter to skip if not found',
+    });
+
+    if (clack.isCancel(tokenPart1Value)) {
+      ui.cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    const baseToken = (baseTokenValue as string)?.trim();
+    const tokenPart0 = (tokenPart0Value as string)?.trim();
+    const tokenPart1 = (tokenPart1Value as string)?.trim();
+
+    if (!baseToken && (!tokenPart0 || !tokenPart1)) {
+      ui.log.error(
+        'Missing required session token. Provide "__Secure-next-auth.session-token" or both ".0" and ".1" parts.'
+      );
+      process.exit(1);
+    }
+
+    if (baseToken) {
+      cookies['__Secure-next-auth.session-token'] = baseToken;
+    }
+    if (tokenPart0) {
+      cookies['__Secure-next-auth.session-token.0'] = tokenPart0;
+    }
+    if (tokenPart1) {
+      cookies['__Secure-next-auth.session-token.1'] = tokenPart1;
     }
 
     // Prompt for optional cookies
@@ -414,7 +473,7 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
       });
 
       if (clack.isCancel(value)) {
-        clack.cancel('Setup cancelled');
+        ui.cancel('Setup cancelled');
         process.exit(0);
       }
 
@@ -424,7 +483,7 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
       }
     }
 
-    clack.log.success(
+    ui.log.success(
       `Collected ${Object.keys(cookies).length} cookie${Object.keys(cookies).length > 1 ? 's' : ''} successfully!`
     );
   }
@@ -436,7 +495,7 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
   };
 
   // Test authentication
-  const spinner = clack.spinner();
+  const spinner = ui.spinner();
   spinner.start('Testing authentication...');
 
   try {
@@ -447,25 +506,29 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
 
     if (!isAuth) {
       spinner.stop('Authentication failed');
-      clack.log.error('Could not authenticate with provided credentials');
+      ui.log.error('Could not authenticate with provided credentials');
       process.exit(1);
     }
 
     spinner.stop('✓ Authentication successful!');
   } catch (error) {
     spinner.stop('Authentication failed');
-    clack.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    ui.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
     process.exit(1);
   }
 
   // Save configuration
   await saveProviderConfig(providerConfig);
-  clack.log.success('Configuration saved to ~/.ai-vault/config.json');
+  ui.log.success('Configuration saved to ~/.ai-vault/config.json');
 
   // Configure archive directory
   const config = await loadConfig();
   if (!config.settings?.archiveDir) {
     console.log();
+    if (!ui.isInteractive) {
+      ui.log.info('Using default archive directory (~/ai-vault-data)');
+      return;
+    }
     const customDir = await clack.text({
       message: 'Archive directory (press Enter for default):',
       placeholder: '~/ai-vault-data',
@@ -476,13 +539,14 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
       config.settings.archiveDir = customDir as string;
       const { saveConfig } = await import('../utils/config.js');
       await saveConfig(config);
-      clack.log.info(`Archive directory set to: ${customDir}`);
+      ui.log.info(`Archive directory set to: ${customDir}`);
     }
   }
 }
 
 async function setupClaude(options: SetupOptions): Promise<void> {
-  clack.log.step('Configuring Claude (Anthropic)');
+  const ui = createCliUI();
+  ui.log.step('Configuring Claude (Anthropic)');
 
   let cookies: Record<string, string>;
 
@@ -501,20 +565,24 @@ async function setupClaude(options: SetupOptions): Promise<void> {
         cookies = parsed;
       }
 
-      clack.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
+      ui.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
     } catch (error) {
-      clack.log.error(
+      ui.log.error(
         `Failed to read cookies file: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       process.exit(1);
     }
   } else {
+    if (!ui.isInteractive) {
+      ui.log.error('Interactive cookie entry requires a TTY. Pass --cookies-file.');
+      process.exit(1);
+    }
     // Interactive prompt for sessionKey cookie
-    clack.log.info('To get your sessionKey cookie from Claude:');
-    clack.log.info('1. Open claude.ai in your browser and log in');
-    clack.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
-    clack.log.info('3. Go to Application → Cookies → https://claude.ai');
-    clack.log.info('4. Find the "sessionKey" cookie and copy its VALUE');
+    ui.log.info('To get your sessionKey cookie from Claude:');
+    ui.log.info('1. Open claude.ai in your browser and log in');
+    ui.log.info('2. Open Developer Tools (F12 or Cmd+Option+I)');
+    ui.log.info('3. Go to Application → Cookies → https://claude.ai');
+    ui.log.info('4. Find the "sessionKey" cookie and copy its VALUE');
     console.log();
 
     const sessionKey = await clack.text({
@@ -536,7 +604,7 @@ async function setupClaude(options: SetupOptions): Promise<void> {
     });
 
     if (clack.isCancel(sessionKey)) {
-      clack.cancel('Setup cancelled');
+      ui.cancel('Setup cancelled');
       process.exit(0);
     }
 
@@ -544,7 +612,7 @@ async function setupClaude(options: SetupOptions): Promise<void> {
       sessionKey: (sessionKey as string).trim(),
     };
 
-    clack.log.success('sessionKey collected successfully!');
+    ui.log.success('sessionKey collected successfully!');
   }
 
   const providerConfig: ProviderConfig = {
@@ -554,7 +622,7 @@ async function setupClaude(options: SetupOptions): Promise<void> {
   };
 
   // Test authentication
-  const spinner = clack.spinner();
+  const spinner = ui.spinner();
   spinner.start('Testing authentication...');
 
   try {
@@ -565,25 +633,29 @@ async function setupClaude(options: SetupOptions): Promise<void> {
 
     if (!isAuth) {
       spinner.stop('Authentication failed');
-      clack.log.error('Could not authenticate with provided credentials');
+      ui.log.error('Could not authenticate with provided credentials');
       process.exit(1);
     }
 
     spinner.stop('✓ Authentication successful!');
   } catch (error) {
     spinner.stop('Authentication failed');
-    clack.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    ui.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
     process.exit(1);
   }
 
   // Save configuration
   await saveProviderConfig(providerConfig);
-  clack.log.success('Configuration saved to ~/.ai-vault/config.json');
+  ui.log.success('Configuration saved to ~/.ai-vault/config.json');
 
   // Configure archive directory
   const config = await loadConfig();
   if (!config.settings?.archiveDir) {
     console.log();
+    if (!ui.isInteractive) {
+      ui.log.info('Using default archive directory (~/ai-vault-data)');
+      return;
+    }
     const customDir = await clack.text({
       message: 'Archive directory (press Enter for default):',
       placeholder: '~/ai-vault-data',
@@ -594,7 +666,7 @@ async function setupClaude(options: SetupOptions): Promise<void> {
       config.settings.archiveDir = customDir as string;
       const { saveConfig } = await import('../utils/config.js');
       await saveConfig(config);
-      clack.log.info(`Archive directory set to: ${customDir}`);
+      ui.log.info(`Archive directory set to: ${customDir}`);
     }
   }
 }

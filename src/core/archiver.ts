@@ -9,20 +9,79 @@ import type { Provider } from '../types/provider.js';
 import { Storage, getDefaultStorageConfig } from './storage.js';
 import { MediaManager } from './media.js';
 import type { ArchiveOptions, ArchiveResult } from '../types/storage.js';
-import { RateLimitError } from '../types/provider.js';
+import { RateLimitError, PermissionError } from '../types/provider.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import ora from 'ora';
 import chalk from 'chalk';
 import pLimit from 'p-limit';
 import os from 'os';
+import v8 from 'v8';
+
+// Memory management constants
+const BATCH_FLUSH_INTERVAL = 50; // Flush pending updates every N conversations
+const MEMORY_WARNING_THRESHOLD = 0.75; // Warn at 75% heap usage
+const MEMORY_FLUSH_THRESHOLD = 0.85; // Force flush at 85% heap usage
 
 export class Archiver {
   private storage: Storage;
   private mediaManager: MediaManager;
+  private lastFlushCount: number = 0;
+  private memoryWarningShown: boolean = false;
 
   constructor(storage: Storage, mediaManager: MediaManager) {
     this.storage = storage;
     this.mediaManager = mediaManager;
+  }
+
+  /**
+   * Check heap memory usage and return usage ratio (0-1)
+   */
+  private getHeapUsageRatio(): number {
+    const heapStats = v8.getHeapStatistics();
+    return heapStats.used_heap_size / heapStats.heap_size_limit;
+  }
+
+  /**
+   * Check if we should flush pending updates based on count or memory pressure
+   */
+  private async checkAndFlush(completed: number, dryRun: boolean): Promise<void> {
+    if (dryRun) return;
+
+    const pendingCount = this.storage.getPendingUpdateCount();
+    const heapUsage = this.getHeapUsageRatio();
+
+    // Log memory warning once
+    if (heapUsage > MEMORY_WARNING_THRESHOLD && !this.memoryWarningShown) {
+      console.log(
+        chalk.yellow(
+          `\n⚠ Memory usage at ${Math.round(heapUsage * 100)}% - will flush more frequently\n`
+        )
+      );
+      this.memoryWarningShown = true;
+    }
+
+    // Force flush if memory pressure is high
+    if (heapUsage > MEMORY_FLUSH_THRESHOLD) {
+      console.log(
+        chalk.gray(
+          `  [Memory: ${Math.round(heapUsage * 100)}%] Flushing ${pendingCount} pending updates...`
+        )
+      );
+      await this.storage.flushPendingUpdates();
+      this.lastFlushCount = completed;
+      // Hint to garbage collector (not guaranteed but can help)
+      if (global.gc) {
+        global.gc();
+      }
+      return;
+    }
+
+    // Periodic flush based on conversation count
+    if (completed - this.lastFlushCount >= BATCH_FLUSH_INTERVAL && pendingCount > 0) {
+      console.log(chalk.gray(`  [Checkpoint] Flushing ${pendingCount} pending updates...`));
+      await this.storage.flushPendingUpdates();
+      this.lastFlushCount = completed;
+    }
   }
 
   /**
@@ -148,6 +207,10 @@ export class Archiver {
         this.storage.enableBatchMode();
       }
 
+      // Reset memory management state
+      this.lastFlushCount = 0;
+      this.memoryWarningShown = false;
+
       // Calculate smart concurrency based on hardware and provider constraints
       const initialConcurrency = this.calculateOptimalConcurrency(provider, options.concurrency);
 
@@ -255,7 +318,7 @@ export class Archiver {
                   `[${completed}/${total}] [DRY RUN] Would archive: ${conversation.title}`
                 )
               );
-              return { status: 'archived' as const, summary, conversation };
+              return { status: 'archived' as const, summary };
             }
 
             // Check content hash to skip save if content is identical
@@ -325,10 +388,14 @@ export class Archiver {
 
             completed++;
             console.log(chalk.green(`[${completed}/${total}] ✓ Archived: ${conversation.title}\n`));
+
+            // Periodic memory management - flush pending updates if needed
+            await this.checkAndFlush(completed, options.dryRun || false);
+
+            // Return minimal result to avoid holding conversation in memory
             return {
               status: 'archived' as const,
               summary,
-              conversation,
               mediaResult,
             };
           } catch (error) {
@@ -368,9 +435,17 @@ export class Archiver {
 
             // Handle other errors
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            console.log(
-              chalk.red(`[${completed}/${total}] ✗ Failed: ${summary.title} - ${errorMessage}\n`)
-            );
+            if (error instanceof PermissionError) {
+              console.log(
+                chalk.yellow(
+                  `[${completed}/${total}] ⚠ Restricted: ${summary.title} - ${errorMessage}\n`
+                )
+              );
+            } else {
+              console.log(
+                chalk.red(`[${completed}/${total}] ✗ Failed: ${summary.title} - ${errorMessage}\n`)
+              );
+            }
 
             return {
               status: 'failed' as const,

@@ -21,6 +21,8 @@ import type {
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError } from '../../types/provider.js';
 import { BrowserScraper } from '../../utils/scraper.js';
+import { parseClaudeMessages } from './message-parser.js';
+import { createClaudeApiError } from './errors.js';
 
 interface ClaudeProject {
   uuid: string;
@@ -46,11 +48,12 @@ export class ClaudeProvider extends BaseProvider {
    * This avoids creating a new page for every operation
    */
   private async getOrCreatePage(): Promise<any> {
-    if (this.cachedPage) {
+    const cachedPage = this.cachedPage;
+    if (cachedPage) {
       try {
         // Check if page is still valid
-        await this.cachedPage.evaluate(() => true);
-        return this.cachedPage;
+        await cachedPage.evaluate(() => true);
+        return cachedPage;
       } catch {
         // Page is stale, create a new one
         this.cachedPage = undefined;
@@ -334,133 +337,43 @@ export class ClaudeProvider extends BaseProvider {
       // Fetch conversation details with full message history
       const url = `https://claude.ai/api/organizations/${this.organizationId}/chat_conversations/${id}?tree=True&rendering_mode=messages&render_all_tools=true`;
 
-      const data = await page.evaluate(
+      const response = await page.evaluate(
         async ({ url }: { url: string }) => {
           const res = await fetch(url, {
             method: 'GET',
             credentials: 'include',
           });
 
-          if (!res.ok) {
-            throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+          const text = await res.text();
+          let json: any = null;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            // Ignore JSON parse errors
           }
 
-          return await res.json();
+          return {
+            ok: res.ok,
+            status: res.status,
+            statusText: res.statusText,
+            text,
+            json,
+          };
         },
         { url }
       );
 
+      if (!response.ok) {
+        throw createClaudeApiError(response.status, response.statusText, response.text);
+      }
+
+      const data = response.json;
+
       // Parse conversation data
       const title = data.name || 'Untitled';
-      const messages: Message[] = [];
-
       // Process chat messages
       const chatMessages = data.chat_messages || [];
-
-      for (const chatMsg of chatMessages) {
-        const sender = chatMsg.sender;
-        const role = sender === 'human' ? 'user' : 'assistant';
-
-        // Process content array - Claude messages have multiple content blocks
-        const contentBlocks = chatMsg.content || [];
-        const textParts: string[] = [];
-        const thinkingParts: string[] = [];
-        const attachments: any[] = [];
-
-        for (const block of contentBlocks) {
-          const contentType = block.type;
-
-          if (contentType === 'text') {
-            // Regular text content
-            if (block.text) {
-              textParts.push(block.text);
-            }
-          } else if (contentType === 'thinking') {
-            // Extended thinking blocks (Claude-specific feature)
-            if (block.thinking) {
-              thinkingParts.push(`[Thinking: ${block.thinking}]`);
-            }
-          } else if (contentType === 'tool_use') {
-            // Tool use blocks - check for artifacts first
-            if (block.name === 'artifacts' && block.input) {
-              // Extract artifact content and metadata
-              const artifactId = block.input.id || `artifact-${attachments.length}`;
-              const artifactType = block.input.type || 'text/plain';
-              const artifactTitle = block.input.title || 'Untitled Artifact';
-              const artifactContent = block.input.content || '';
-
-              // Determine file extension from artifact type
-              let extension = '.txt';
-              if (artifactType.includes('html')) extension = '.html';
-              else if (artifactType.includes('javascript') || artifactType.includes('react'))
-                extension = '.jsx';
-              else if (artifactType.includes('python')) extension = '.py';
-              else if (artifactType.includes('svg')) extension = '.svg';
-              else if (artifactType.includes('mermaid')) extension = '.mmd';
-
-              // Add artifact to attachments with full content
-              attachments.push({
-                id: artifactId,
-                type: 'artifact',
-                title: artifactTitle,
-                artifactType: artifactType,
-                content: artifactContent,
-                extension: extension,
-              });
-
-              // Update text marker to show artifact title
-              textParts.push(`[Artifact: ${artifactTitle}]`);
-            } else {
-              // Other tool uses (web search, code execution, etc.)
-              textParts.push(`[Tool: ${block.name || 'unknown'}]`);
-            }
-          } else if (contentType === 'tool_result') {
-            // Skip tool results for now
-          } else if (contentType === 'image') {
-            // Image attachments
-            if (block.source?.url) {
-              attachments.push({
-                id: block.id || `${chatMsg.uuid}-image-${attachments.length}`,
-                type: 'image',
-                url: block.source.url,
-                mimeType: block.source.media_type || 'image/jpeg',
-              });
-            }
-          } else if (contentType === 'document') {
-            // Document attachments (PDFs, etc.)
-            if (block.source?.url) {
-              attachments.push({
-                id: block.id || `${chatMsg.uuid}-doc-${attachments.length}`,
-                type: 'document',
-                url: block.source.url,
-                mimeType: block.source.media_type || 'application/octet-stream',
-              });
-            }
-          }
-        }
-
-        // Combine thinking and text (thinking first if present)
-        const fullContent = [...thinkingParts, ...textParts].join('\n\n').trim();
-
-        // Skip messages with no content and no attachments
-        if (!fullContent && attachments.length === 0) {
-          continue;
-        }
-
-        // Convert timestamp
-        const timestamp = chatMsg.created_at ? new Date(chatMsg.created_at) : new Date();
-
-        messages.push({
-          id: chatMsg.uuid,
-          role,
-          content: fullContent,
-          timestamp,
-          attachments: attachments.length > 0 ? attachments : undefined,
-          metadata: {
-            originalSender: sender,
-          },
-        });
-      }
+      const messages: Message[] = parseClaudeMessages(chatMessages);
 
       // Extract hierarchy information
       const hierarchy: any = {};

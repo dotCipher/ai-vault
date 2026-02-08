@@ -8,6 +8,7 @@ import { getProvider } from '../providers/index.js';
 import { loadConfig } from '../utils/config.js';
 import { createArchiver } from '../core/archiver.js';
 import type { ProviderName } from '../types/index.js';
+import { resolveArchiveDir } from '../utils/archive-dir.js';
 
 interface StatusOptions {
   provider?: string;
@@ -158,13 +159,7 @@ async function checkProviderStatus(
 
     // Load local archive
     archiveSpinner = ora('Loading local archive...').start();
-    let archiveDir = config.settings?.archiveDir;
-
-    // Expand ~ to home directory
-    if (archiveDir && archiveDir.startsWith('~')) {
-      const os = await import('os');
-      archiveDir = archiveDir.replace(/^~/, os.homedir());
-    }
+    const archiveDir = resolveArchiveDir(config.settings?.archiveDir);
 
     const archiver = createArchiver(archiveDir);
     await archiver.init();

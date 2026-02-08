@@ -379,12 +379,7 @@ export class Scheduler {
    */
   private buildArchiveCommand(schedule: ScheduleConfig): string {
     // Use full path to node to ensure cron jobs work correctly
-    const args: string[] = [
-      this.nodePath,
-      this.cliPath,
-      'backup',
-      `--provider "${schedule.provider}"`,
-    ];
+    const args: string[] = [this.nodePath, this.cliPath, 'backup', `"${schedule.provider}"`];
 
     // Add schedule ID for status tracking
     args.push(`--schedule-id "${schedule.id}"`);

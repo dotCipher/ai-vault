@@ -2,15 +2,16 @@
  * Archive Command - Archive conversations from providers
  */
 
-import * as clack from '@clack/prompts';
 import chalk from 'chalk';
-import { getProviderConfig, listConfiguredProviders, loadConfig } from '../utils/config.js';
+import { getProviderConfig, loadConfig } from '../utils/config.js';
 import { getProvider } from '../providers/index.js';
 import { createArchiver } from '../core/archiver.js';
 import type { Provider } from '../types/provider.js';
 import type { ArchiveOptions } from '../types/storage.js';
 import { captureSnapshot, calculateDiff, printDataDiff } from '../utils/data-diff.js';
 import { ScheduleManager } from '../utils/schedule-manager.js';
+import { resolveArchiveDir } from '../utils/archive-dir.js';
+import { createCliUI } from '../utils/cli-ui.js';
 
 interface ArchiveCommandOptions {
   provider?: string;
@@ -26,6 +27,8 @@ interface ArchiveCommandOptions {
 }
 
 export async function archiveCommand(options: ArchiveCommandOptions): Promise<void> {
+  const ui = createCliUI();
+
   // Initialize schedule manager if this is a scheduled run
   const scheduleManager = options.scheduleId ? new ScheduleManager() : null;
 
@@ -33,14 +36,15 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
   let scheduleStatus: 'success' | 'error' = 'success';
 
   try {
-    clack.intro(chalk.bold.blue('AI Vault Archive'));
+    ui.intro(chalk.bold.blue('AI Vault Archive'));
 
-    // Check for configured providers
-    const configuredProviders = await listConfiguredProviders();
+    // Load config and configured providers
+    const config = await loadConfig();
+    const configuredProviders = Object.keys(config.providers);
 
     if (configuredProviders.length === 0) {
-      clack.log.error('No providers configured.');
-      clack.log.info('Run `ai-vault setup` first to configure a provider.');
+      ui.log.error('No providers configured.');
+      ui.log.info('Run `ai-vault setup` first to configure a provider.');
       scheduleStatus = 'error';
       process.exit(1);
     }
@@ -51,9 +55,26 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     if (!providerName) {
       if (configuredProviders.length === 1) {
         providerName = configuredProviders[0];
-        clack.log.info(`Using provider: ${providerName}`);
+        ui.log.info(`Using provider: ${providerName}`);
+      } else if (options.yes) {
+        const defaultProvider = config.settings?.defaultProvider;
+        if (defaultProvider && configuredProviders.includes(defaultProvider)) {
+          providerName = defaultProvider;
+          ui.log.info(`Using default provider: ${providerName}`);
+        } else {
+          ui.log.error('Provider is required when multiple providers are configured.');
+          ui.log.info('Run `ai-vault backup <provider> --yes` or set settings.defaultProvider.');
+          scheduleStatus = 'error';
+          process.exit(1);
+        }
       } else {
-        const selected = await clack.select({
+        if (!ui.isInteractive) {
+          ui.log.error('Provider selection requires a TTY. Provide a provider or use --yes.');
+          scheduleStatus = 'error';
+          process.exit(1);
+        }
+
+        const selected = await ui.select({
           message: 'Select provider to archive:',
           options: configuredProviders.map((name) => ({
             value: name,
@@ -61,8 +82,8 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
           })),
         });
 
-        if (clack.isCancel(selected)) {
-          clack.cancel('Archive cancelled');
+        if (ui.isCancel(selected)) {
+          ui.cancel('Archive cancelled');
           process.exit(0);
         }
 
@@ -72,8 +93,8 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
 
     // Verify provider is configured
     if (!configuredProviders.includes(providerName)) {
-      clack.log.error(`Provider "${providerName}" is not configured.`);
-      clack.log.info(`Configured providers: ${configuredProviders.join(', ')}`);
+      ui.log.error(`Provider "${providerName}" is not configured.`);
+      ui.log.info(`Configured providers: ${configuredProviders.join(', ')}`);
       scheduleStatus = 'error';
       process.exit(1);
     }
@@ -91,7 +112,7 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     if (options.since) {
       archiveOptions.since = new Date(options.since);
       if (isNaN(archiveOptions.since.getTime())) {
-        clack.log.error(`Invalid date format: ${options.since}`);
+        ui.log.error(`Invalid date format: ${options.since}`);
         scheduleStatus = 'error';
         process.exit(1);
       }
@@ -100,7 +121,7 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     if (options.until) {
       archiveOptions.until = new Date(options.until);
       if (isNaN(archiveOptions.until.getTime())) {
-        clack.log.error(`Invalid date format: ${options.until}`);
+        ui.log.error(`Invalid date format: ${options.until}`);
         scheduleStatus = 'error';
         process.exit(1);
       }
@@ -110,7 +131,7 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     if (options.limit) {
       const limit = parseInt(options.limit);
       if (isNaN(limit) || limit <= 0) {
-        clack.log.error('Limit must be a positive number');
+        ui.log.error('Limit must be a positive number');
         scheduleStatus = 'error';
         process.exit(1);
       }
@@ -122,37 +143,41 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     archiveOptions.downloadMedia = !options.skipMedia;
     archiveOptions.conversationIds = options.conversationIds;
 
-    // Load config once for directory determination
-    const config = await loadConfig();
     const displayArchiveDir =
       options.outputDir || config.settings?.archiveDir || '~/ai-vault-data (default)';
 
     // Show summary
     console.log();
-    clack.log.info(chalk.bold('Archive Configuration:'));
-    clack.log.info(`  Provider: ${providerName}`);
-    clack.log.info(`  Output: ${displayArchiveDir}`);
+    ui.log.info(chalk.bold('Archive Configuration:'));
+    ui.log.info(`  Provider: ${providerName}`);
+    ui.log.info(`  Output: ${displayArchiveDir}`);
     if (archiveOptions.since) {
-      clack.log.info(`  Since: ${archiveOptions.since.toLocaleDateString()}`);
+      ui.log.info(`  Since: ${archiveOptions.since.toLocaleDateString()}`);
     }
     if (archiveOptions.until) {
-      clack.log.info(`  Until: ${archiveOptions.until.toLocaleDateString()}`);
+      ui.log.info(`  Until: ${archiveOptions.until.toLocaleDateString()}`);
     }
     if (archiveOptions.limit) {
-      clack.log.info(`  Limit: ${archiveOptions.limit} conversations`);
+      ui.log.info(`  Limit: ${archiveOptions.limit} conversations`);
     }
-    clack.log.info(`  Media: ${archiveOptions.downloadMedia ? 'Yes' : 'No'}`);
-    clack.log.info(`  Mode: ${archiveOptions.dryRun ? 'Dry Run (preview only)' : 'Live'}`);
+    ui.log.info(`  Media: ${archiveOptions.downloadMedia ? 'Yes' : 'No'}`);
+    ui.log.info(`  Mode: ${archiveOptions.dryRun ? 'Dry Run (preview only)' : 'Live'}`);
     console.log();
 
     // Confirm if not dry run and --yes not provided
     if (!archiveOptions.dryRun && !options.yes) {
-      const confirm = await clack.confirm({
+      if (!ui.isInteractive) {
+        ui.log.error('Confirmation requires a TTY. Re-run with --yes.');
+        scheduleStatus = 'error';
+        process.exit(1);
+      }
+
+      const confirm = await ui.confirm({
         message: 'Start archiving?',
       });
 
-      if (clack.isCancel(confirm) || !confirm) {
-        clack.cancel('Archive cancelled');
+      if (ui.isCancel(confirm) || !confirm) {
+        ui.cancel('Archive cancelled');
         process.exit(0);
       }
     }
@@ -161,14 +186,7 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     console.log();
 
     // Determine archive directory: CLI option > config > default
-    let archiveDir = options.outputDir || config.settings?.archiveDir;
-
-    // Expand ~ to home directory
-    if (archiveDir && archiveDir.startsWith('~')) {
-      const os = await import('os');
-      archiveDir = archiveDir.replace(/^~/, os.homedir());
-    }
-
+    const archiveDir = resolveArchiveDir(options.outputDir || config.settings?.archiveDir);
     const archiver = createArchiver(archiveDir);
     await archiver.init();
 
@@ -193,24 +211,30 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
       console.log();
 
       if (result.errors.length > 0) {
-        clack.log.warn(`Completed with ${result.errors.length} errors`);
+        ui.log.warn(`Completed with ${result.errors.length} errors`);
         scheduleStatus = 'error';
       } else {
-        clack.outro(chalk.green('✓ Archive complete!'));
+        ui.outro(chalk.green('✓ Archive complete!'));
       }
     } catch (error) {
-      clack.log.error(
-        'Archive failed: ' + (error instanceof Error ? error.message : 'Unknown error')
-      );
+      ui.log.error('Archive failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
       scheduleStatus = 'error';
       throw error;
     } finally {
       if (provider.cleanup) {
-        await provider.cleanup();
+        try {
+          await provider.cleanup();
+        } catch (cleanupError) {
+          console.error(
+            'Warning: Failed to cleanup provider resources:',
+            cleanupError instanceof Error ? cleanupError.message : cleanupError
+          );
+        }
       }
     }
   } catch (error) {
     scheduleStatus = 'error';
+    console.error('Archive error:', error instanceof Error ? error.message : error);
     if ((error as any)?.isExit !== false) {
       process.exit(1);
     }
@@ -247,7 +271,8 @@ async function loadProvider(providerName: string): Promise<Provider> {
   }
 
   // Authenticate
-  const spinner = clack.spinner();
+  const ui = createCliUI();
+  const spinner = ui.spinner();
   spinner.start('Authenticating...');
 
   try {
@@ -257,11 +282,11 @@ async function loadProvider(providerName: string): Promise<Provider> {
     if (!isAuth) {
       spinner.stop('Authentication failed');
       console.log();
-      clack.log.error('Your session cookies appear to be expired or invalid.');
-      clack.log.info(
+      ui.log.error('Your session cookies appear to be expired or invalid.');
+      ui.log.info(
         chalk.yellow(`To fix this, run: ${chalk.bold(`ai-vault setup ${providerName}`)}`)
       );
-      clack.log.info(chalk.gray('This will guide you through updating your session cookies.'));
+      ui.log.info(chalk.gray('This will guide you through updating your session cookies.'));
       process.exit(1);
     }
 
@@ -269,7 +294,7 @@ async function loadProvider(providerName: string): Promise<Provider> {
   } catch (error: any) {
     spinner.stop('Authentication failed');
     console.log();
-    clack.log.error(error.message || 'Unknown authentication error');
+    ui.log.error(error.message || 'Unknown authentication error');
 
     // Show helpful hint for auth-related errors
     if (
@@ -280,10 +305,10 @@ async function loadProvider(providerName: string): Promise<Provider> {
       error.message?.includes('unauthorized') ||
       error.name === 'AuthenticationError'
     ) {
-      clack.log.info(
+      ui.log.info(
         chalk.yellow(`To fix this, run: ${chalk.bold(`ai-vault setup ${providerName}`)}`)
       );
-      clack.log.info(chalk.gray('This will guide you through updating your session cookies.'));
+      ui.log.info(chalk.gray('This will guide you through updating your session cookies.'));
     }
     process.exit(1);
   }

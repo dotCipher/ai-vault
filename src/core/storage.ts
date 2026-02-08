@@ -60,6 +60,17 @@ export class Storage {
   }
 
   /**
+   * Get the count of pending updates (useful for memory management)
+   */
+  getPendingUpdateCount(): number {
+    let count = 0;
+    for (const updates of this.pendingIndexUpdates.values()) {
+      count += updates.size;
+    }
+    return count;
+  }
+
+  /**
    * Flush all pending index updates to disk
    */
   async flushPendingUpdates(): Promise<void> {

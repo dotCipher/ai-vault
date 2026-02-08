@@ -2,16 +2,18 @@
  * Import Command - Import from native platform exports
  */
 
-import * as clack from '@clack/prompts';
 import chalk from 'chalk';
+import * as clack from '@clack/prompts';
 import { readFileSync, existsSync, statSync, readdirSync, cpSync, mkdirSync } from 'fs';
 import { resolve, join } from 'path';
 import path from 'path';
 import { loadConfig } from '../utils/config.js';
 import { createArchiver } from '../core/archiver.js';
 import { prepareImportPath } from '../utils/zip.js';
+import { resolveArchiveDir } from '../utils/archive-dir.js';
 import type { Conversation, Message } from '../types/index.js';
 import { captureSnapshot, calculateDiff, printDataDiff } from '../utils/data-diff.js';
+import { createCliUI } from '../utils/cli-ui.js';
 
 interface ImportOptions {
   provider?: string;
@@ -77,14 +79,15 @@ async function detectProvider(filePath: string): Promise<string | null> {
 }
 
 export async function importCommand(options: ImportOptions): Promise<void> {
-  clack.intro(chalk.bold.blue('AI Vault Import'));
+  const ui = createCliUI();
+  ui.intro(chalk.bold.blue('AI Vault Import'));
 
   const { file } = options;
 
   // Validate file exists
   const filePath = resolve(file);
   if (!existsSync(filePath)) {
-    clack.log.error(`File or directory not found: ${filePath}`);
+    ui.log.error(`File or directory not found: ${filePath}`);
     process.exit(1);
   }
 
@@ -97,7 +100,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
     ({ processPath, cleanup, isTemporary } = prepareImportPath(filePath));
 
     if (isTemporary) {
-      clack.log.info(`Extracting ZIP file...`);
+      ui.log.info(`Extracting ZIP file...`);
     }
 
     // Auto-detect provider if not specified
@@ -105,28 +108,22 @@ export async function importCommand(options: ImportOptions): Promise<void> {
     if (!provider) {
       const detected = await detectProvider(processPath);
       if (!detected) {
-        clack.log.error('Could not auto-detect provider from export format.');
-        clack.log.info('Please specify the provider with --provider flag');
-        clack.log.info('Supported providers: grok, grok-web, chatgpt, claude');
+        ui.log.error('Could not auto-detect provider from export format.');
+        ui.log.info('Please specify the provider with --provider flag');
+        ui.log.info('Supported providers: grok, grok-web, chatgpt, claude');
         process.exit(1);
       }
       provider = detected;
-      clack.log.success(`Auto-detected provider: ${provider}`);
+      ui.log.success(`Auto-detected provider: ${provider}`);
     }
 
     // Load config for output directory
     const config = await loadConfig();
-    let archiveDir = options.output || config.settings?.archiveDir;
+    const archiveDir = resolveArchiveDir(options.output || config.settings?.archiveDir);
 
-    // Expand ~ to home directory
-    if (archiveDir && archiveDir.startsWith('~')) {
-      const os = await import('os');
-      archiveDir = archiveDir.replace(/^~/, os.homedir());
-    }
-
-    clack.log.info(`Provider: ${provider}`);
-    clack.log.info(`Import from: ${filePath}`);
-    clack.log.info(`Output: ${archiveDir || '~/ai-vault-data (default)'}`);
+    ui.log.info(`Provider: ${provider}`);
+    ui.log.info(`Import from: ${filePath}`);
+    ui.log.info(`Output: ${archiveDir}`);
     console.log();
 
     // Import based on provider
@@ -145,27 +142,31 @@ export async function importCommand(options: ImportOptions): Promise<void> {
         ({ conversations, mediaDir: sourceMediaDir } = await importClaude(processPath));
         break;
       default:
-        clack.log.error(`Import not yet supported for provider: ${provider}`);
-        clack.log.info('Supported providers: grok, grok-web, chatgpt, claude');
+        ui.log.error(`Import not yet supported for provider: ${provider}`);
+        ui.log.info('Supported providers: grok, grok-web, chatgpt, claude');
         process.exit(1);
     }
 
     // Count total media files
     const totalMedia = conversations.reduce((sum, c) => sum + (c.metadata.mediaCount || 0), 0);
 
-    clack.log.success(
+    ui.log.success(
       `Parsed ${conversations.length} conversations${totalMedia > 0 ? ` with ${totalMedia} media files` : ''}`
     );
     console.log();
 
     // Confirm import (skip if --yes flag)
     if (!options.yes) {
-      const confirm = await clack.confirm({
+      if (!ui.isInteractive) {
+        ui.log.error('Confirmation requires a TTY. Re-run with --yes.');
+        process.exit(1);
+      }
+      const confirm = await ui.confirm({
         message: `Import ${conversations.length} conversations to archive?`,
       });
 
-      if (clack.isCancel(confirm) || !confirm) {
-        clack.cancel('Import cancelled');
+      if (ui.isCancel(confirm) || !confirm) {
+        ui.cancel('Import cancelled');
         process.exit(0);
       }
     }
@@ -178,7 +179,7 @@ export async function importCommand(options: ImportOptions): Promise<void> {
     // Capture stats before importing (for data diff)
     const beforeSnapshot = await captureSnapshot(storage, provider);
 
-    const spinner = clack.spinner();
+    const spinner = ui.spinner();
     spinner.start('Importing conversations...');
 
     let imported = 0;
@@ -199,12 +200,12 @@ export async function importCommand(options: ImportOptions): Promise<void> {
 
     // Copy media files if present
     if (sourceMediaDir && existsSync(sourceMediaDir)) {
-      const mediaSpinner = clack.spinner();
+      const mediaSpinner = ui.spinner();
       mediaSpinner.start('Copying media files...');
 
       try {
         // Get provider-specific media directory in archive
-        const targetMediaBase = path.join(archiveDir || '~/ai-vault-data', provider, 'media');
+        const targetMediaBase = path.join(archiveDir, provider, 'media');
         mkdirSync(targetMediaBase, { recursive: true });
 
         // Copy all media files from source directory

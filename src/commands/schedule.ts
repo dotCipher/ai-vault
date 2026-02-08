@@ -9,6 +9,7 @@ import { listConfiguredProviders } from '../utils/config.js';
 import type { ScheduleArchiveOptions } from '../types/schedule.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { createCliUI } from '../utils/cli-ui.js';
 
 interface ScheduleCommandOptions {
   action?: 'add' | 'list' | 'remove' | 'enable' | 'disable' | 'status';
@@ -22,6 +23,7 @@ interface ScheduleCommandOptions {
 }
 
 export async function scheduleCommand(options: ScheduleCommandOptions): Promise<void> {
+  const ui = createCliUI();
   const manager = new ScheduleManager();
   const action = options.action || 'list';
 
@@ -45,7 +47,7 @@ export async function scheduleCommand(options: ScheduleCommandOptions): Promise<
       await showStatus(manager);
       break;
     default:
-      clack.log.error(`Unknown action: ${action}`);
+      ui.log.error(`Unknown action: ${action}`);
       process.exit(1);
   }
 }
@@ -57,27 +59,32 @@ async function addSchedule(
   manager: ScheduleManager,
   options: ScheduleCommandOptions
 ): Promise<void> {
-  clack.intro(chalk.bold.blue('Add Schedule'));
+  const ui = createCliUI();
+  ui.intro(chalk.bold.blue('Add Schedule'));
 
   // Get provider
   let provider = options.provider;
   if (!provider) {
     const configured = await listConfiguredProviders();
     if (configured.length === 0) {
-      clack.log.error('No providers configured. Run `ai-vault setup` first.');
+      ui.log.error('No providers configured. Run `ai-vault setup` first.');
       process.exit(1);
     }
 
     if (configured.length === 1) {
       provider = configured[0];
     } else {
+      if (!ui.isInteractive) {
+        ui.log.error('Provider selection requires a TTY. Pass --provider explicitly.');
+        process.exit(1);
+      }
       const selected = await clack.select({
         message: 'Select provider:',
         options: configured.map((p) => ({ value: p, label: p })),
       });
 
       if (clack.isCancel(selected)) {
-        clack.cancel('Cancelled');
+        ui.cancel('Cancelled');
         process.exit(0);
       }
 
@@ -88,6 +95,10 @@ async function addSchedule(
   // Get cron expression
   let cron = options.cron;
   if (!cron) {
+    if (!ui.isInteractive) {
+      ui.log.error('Cron selection requires a TTY. Pass --cron explicitly.');
+      process.exit(1);
+    }
     const cronChoice = await clack.select({
       message: 'Select schedule frequency:',
       options: [
@@ -100,7 +111,7 @@ async function addSchedule(
     });
 
     if (clack.isCancel(cronChoice)) {
-      clack.cancel('Cancelled');
+      ui.cancel('Cancelled');
       process.exit(0);
     }
 
@@ -116,7 +127,7 @@ async function addSchedule(
       });
 
       if (clack.isCancel(customCron)) {
-        clack.cancel('Cancelled');
+        ui.cancel('Cancelled');
         process.exit(0);
       }
 

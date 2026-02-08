@@ -104,6 +104,20 @@ program
   });
 
 program
+  .command('verify')
+  .description('Verify local archive integrity and remote parity')
+  .argument('[provider]', 'Provider to verify (claude, chatgpt, grok-web, etc.)')
+  .option('--since <date>', 'Verify conversations since date (YYYY-MM-DD)')
+  .option('--until <date>', 'Verify conversations until date (YYYY-MM-DD)')
+  .option('--limit <number>', 'Maximum number of conversations to verify')
+  .option('--full', 'Fetch each conversation and compare message/media counts')
+  .option('--local-only', 'Skip remote checks (local integrity only)')
+  .action(async (provider, options) => {
+    const { verifyCommand } = await import('./commands/verify.js');
+    await verifyCommand({ ...options, provider });
+  });
+
+program
   .command('list')
   .description('[DEPRECATED: use "status" instead] List conversations from providers')
   .argument('[provider]', 'Provider to list from (claude, chatgpt, grok-web, etc.)')

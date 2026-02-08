@@ -71,6 +71,13 @@ export class MediaManager {
   }
 
   /**
+   * Get a snapshot of the media registry (read-only)
+   */
+  getRegistrySnapshot(): MediaRegistry {
+    return JSON.parse(JSON.stringify(this.registry));
+  }
+
+  /**
    * Download all media from a conversation with parallel processing
    */
   async downloadConversationMedia(

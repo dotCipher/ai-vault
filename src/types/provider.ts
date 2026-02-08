@@ -122,3 +122,13 @@ export class RateLimitError extends Error {
     this.name = 'RateLimitError';
   }
 }
+
+export class PermissionError extends Error {
+  constructor(
+    message: string,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'PermissionError';
+  }
+}

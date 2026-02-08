@@ -16,6 +16,7 @@ import type { Conversation, Message, ConversationHierarchy } from '../../types/i
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { CookieApiStrategy } from '../auth/strategies.js';
 import { saveProviderConfig } from '../../utils/config.js';
+import { extractChatGPTAttachments, extractChatGPTMessageContent } from './attachments.js';
 
 /**
  * ChatGPT Provider with strategy-based authentication
@@ -374,105 +375,15 @@ export class ChatGPTApiProvider extends StrategyBasedProvider {
         const role = msg.author?.role === 'user' ? 'user' : 'assistant';
 
         const parts = msg.content?.parts || [];
-        const content = parts.filter((p: any) => typeof p === 'string').join('\n');
-
-        const hasMediaContent = parts.some(
-          (p: any) =>
-            typeof p === 'object' &&
-            (p.content_type === 'audio_asset_pointer' ||
-              p.content_type === 'real_time_user_audio_video_asset_pointer' ||
-              p.content_type === 'image_asset_pointer')
-        );
+        const { content, hasMediaContent } = extractChatGPTMessageContent(parts);
 
         if (content || hasMediaContent) {
-          const attachments: any[] = [];
-
-          // Extract attachments (same logic as original)
-          if (msg.metadata?.attachments) {
-            for (const att of msg.metadata.attachments) {
-              let possibleUrl =
-                att.download_url || att.url || att.download_link || att.fileDownloadUrl || '';
-
-              if (
-                possibleUrl.startsWith('file-service://') ||
-                possibleUrl.startsWith('sediment://')
-              ) {
-                const fileId = possibleUrl.replace(/^(sediment|file-service):\/\//, '');
-                possibleUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
-              }
-
-              if (!possibleUrl || possibleUrl.trim() === '') {
-                continue;
-              }
-
-              if (att.mimeType?.startsWith('image/')) {
-                attachments.push({
-                  id: att.id || `${node.id}-${attachments.length}`,
-                  type: 'image',
-                  url: possibleUrl,
-                  mimeType: att.mimeType,
-                  size: att.size,
-                });
-              } else if (att.mimeType?.startsWith('video/')) {
-                attachments.push({
-                  id: att.id || `${node.id}-${attachments.length}`,
-                  type: 'video',
-                  url: possibleUrl,
-                  mimeType: att.mimeType,
-                  size: att.size,
-                });
-              } else {
-                attachments.push({
-                  id: att.id || `${node.id}-${attachments.length}`,
-                  type: 'document',
-                  url: possibleUrl,
-                  mimeType: att.mimeType,
-                  size: att.size,
-                });
-              }
-            }
-          }
-
-          // Extract audio/image from content parts
-          for (const part of parts) {
-            if (typeof part === 'object') {
-              if (part.content_type === 'audio_asset_pointer' && part.asset_pointer) {
-                const assetPointer = part.asset_pointer;
-                if (
-                  assetPointer.startsWith('sediment://') ||
-                  assetPointer.startsWith('file-service://')
-                ) {
-                  const fileId = assetPointer.replace(/^(sediment|file-service):\/\//, '');
-                  const downloadUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
-                  attachments.push({
-                    id: fileId,
-                    type: 'audio',
-                    url: downloadUrl,
-                    mimeType: part.format === 'wav' ? 'audio/wav' : 'audio/mpeg',
-                    size: part.size_bytes,
-                  });
-                }
-              }
-
-              if (part.content_type === 'image_asset_pointer' && part.asset_pointer) {
-                const assetPointer = part.asset_pointer;
-                if (
-                  assetPointer.startsWith('sediment://') ||
-                  assetPointer.startsWith('file-service://')
-                ) {
-                  const fileId = assetPointer.replace(/^(sediment|file-service):\/\//, '');
-                  const downloadUrl = `https://chatgpt.com/backend-api/files/download/${fileId}?conversation_id=${id}&inline=false`;
-                  attachments.push({
-                    id: fileId,
-                    type: 'image',
-                    url: downloadUrl,
-                    mimeType: 'image/png',
-                    size: part.size_bytes,
-                  });
-                }
-              }
-            }
-          }
+          const attachments = extractChatGPTAttachments({
+            parts,
+            metadataAttachments: msg.metadata?.attachments,
+            nodeId: node.id,
+            conversationId: id,
+          });
 
           messages.push({
             id: msg.id || node.id,
