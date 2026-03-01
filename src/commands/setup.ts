@@ -16,7 +16,7 @@ interface SetupOptions {
   provider?: string;
 }
 
-const VALID_PROVIDERS = ['grok-web', 'grok-x', 'chatgpt', 'claude'];
+const VALID_PROVIDERS = ['grok-web', 'grok-x', 'chatgpt', 'claude', 'gemini'];
 
 export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   const ui = createCliUI();
@@ -54,6 +54,7 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
         { value: 'grok-x', label: 'Grok on X (x.com)', hint: 'x.com/grok' },
         { value: 'chatgpt', label: 'ChatGPT (OpenAI)', hint: 'chatgpt.com' },
         { value: 'claude', label: 'Claude (Anthropic)', hint: 'claude.ai' },
+        { value: 'gemini', label: 'Gemini (Google)', hint: 'gemini.google.com' },
       ],
     });
 
@@ -98,6 +99,9 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
       break;
     case 'claude':
       await setupClaude(options);
+      break;
+    case 'gemini':
+      await setupGemini(options);
       break;
     default:
       ui.log.error(`${providerName} provider is not yet implemented`);
@@ -490,6 +494,151 @@ async function setupChatGPT(options: SetupOptions): Promise<void> {
 
   const providerConfig: ProviderConfig = {
     providerName: 'chatgpt',
+    authMethod: 'cookies',
+    cookies,
+  };
+
+  // Test authentication
+  const spinner = ui.spinner();
+  spinner.start('Testing authentication...');
+
+  try {
+    const provider = getProvider(providerConfig.providerName as any);
+    await provider.authenticate(providerConfig);
+    const isAuth = await provider.isAuthenticated();
+    await provider.cleanup?.();
+
+    if (!isAuth) {
+      spinner.stop('Authentication failed');
+      ui.log.error('Could not authenticate with provided credentials');
+      process.exit(1);
+    }
+
+    spinner.stop('✓ Authentication successful!');
+  } catch (error) {
+    spinner.stop('Authentication failed');
+    ui.log.error('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    process.exit(1);
+  }
+
+  // Save configuration
+  await saveProviderConfig(providerConfig);
+  ui.log.success('Configuration saved to ~/.ai-vault/config.json');
+
+  // Configure archive directory
+  const config = await loadConfig();
+  if (!config.settings?.archiveDir) {
+    console.log();
+    if (!ui.isInteractive) {
+      ui.log.info('Using default archive directory (~/ai-vault-data)');
+      return;
+    }
+    const customDir = await clack.text({
+      message: 'Archive directory (press Enter for default):',
+      placeholder: '~/ai-vault-data',
+    });
+
+    if (!clack.isCancel(customDir) && customDir) {
+      config.settings = config.settings || {};
+      config.settings.archiveDir = customDir as string;
+      const { saveConfig } = await import('../utils/config.js');
+      await saveConfig(config);
+      ui.log.info(`Archive directory set to: ${customDir}`);
+    }
+  }
+}
+
+async function setupGemini(options: SetupOptions): Promise<void> {
+  const ui = createCliUI();
+  ui.log.step('Configuring Gemini (Google)');
+
+  let cookies: Record<string, string>;
+
+  // Read from file if provided
+  if (options.cookiesFile) {
+    try {
+      const filePath = resolve(options.cookiesFile);
+      const fileContent = readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(fileContent);
+
+      if (Array.isArray(parsed)) {
+        cookies = Object.fromEntries(parsed.map((cookie: any) => [cookie.name, cookie.value]));
+      } else {
+        cookies = parsed;
+      }
+
+      ui.log.success(`Loaded ${Object.keys(cookies).length} cookies from file`);
+    } catch (error) {
+      ui.log.error(
+        `Failed to read cookies file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      process.exit(1);
+    }
+  } else {
+    if (!ui.isInteractive) {
+      ui.log.error('Interactive cookie entry requires a TTY. Pass --cookies-file.');
+      process.exit(1);
+    }
+
+    ui.log.info('Gemini requires the following cookies from gemini.google.com:');
+    console.log();
+    ui.log.info('  Required:');
+    ui.log.info('    SID, HSID, SSID, APISID, SAPISID, SIDCC, NID');
+    ui.log.info('    __Secure-1PSID, __Secure-1PSIDTS, __Secure-1PSIDCC, __Secure-1PAPISID');
+    ui.log.info('    __Secure-3PSID, __Secure-3PSIDTS, __Secure-3PSIDCC, __Secure-3PAPISID');
+    ui.log.info('  Optional (but recommended):');
+    ui.log.info('    SOCS (required in EU), AEC, S, NID, __Secure-ENID, __Secure-STRP,');
+    ui.log.info('    SEARCH_SAMESITE, __Secure-BUCKET, _ga, _gcl_au');
+    console.log();
+    ui.log.info('How to export all cookies at once:');
+    ui.log.info('  1. Open gemini.google.com in your browser and log in');
+    ui.log.info('  2. Install "Cookie-Editor" or "EditThisCookie" browser extension');
+    ui.log.info('  3. Click the extension icon → Export as JSON');
+    ui.log.info('  4. Paste the JSON below, OR save to a file and use:');
+    ui.log.info('     ai-vault setup gemini --cookies-file <path>');
+    console.log();
+
+    const jsonInput = await clack.text({
+      message: 'Paste cookies JSON (array or {"name":"value"} object):',
+      placeholder: '[{"name":"SID","value":"..."},...]  or  {"SID":"...","HSID":"..."}',
+      validate: (val) => {
+        if (!val || val.trim().length === 0) return 'Cookies JSON is required';
+        try {
+          const parsed = JSON.parse(val.trim());
+          if (typeof parsed !== 'object' || parsed === null)
+            return 'Must be a JSON object or array';
+          const keys = Array.isArray(parsed)
+            ? parsed.map((c: any) => c?.name).filter(Boolean)
+            : Object.keys(parsed);
+          if (keys.length === 0) return 'No cookies found in JSON';
+          const required = ['SID', '__Secure-1PSID', 'SAPISID'];
+          const missing = required.filter((k) => !keys.includes(k));
+          if (missing.length === required.length) {
+            return `Missing key cookies: ${required.join(', ')}`;
+          }
+        } catch {
+          return 'Invalid JSON — copy the full export from your browser extension';
+        }
+      },
+    });
+
+    if (clack.isCancel(jsonInput)) {
+      ui.cancel('Setup cancelled');
+      process.exit(0);
+    }
+
+    // JSON validity already confirmed by the validator above
+    const parsed = JSON.parse((jsonInput as string).trim());
+    if (Array.isArray(parsed)) {
+      cookies = Object.fromEntries(parsed.map((c: any) => [c.name, c.value]));
+    } else {
+      cookies = parsed;
+    }
+    ui.log.success(`Loaded ${Object.keys(cookies).length} cookies`);
+  }
+
+  const providerConfig: ProviderConfig = {
+    providerName: 'gemini',
     authMethod: 'cookies',
     cookies,
   };
