@@ -52,6 +52,8 @@ program
   .option('--dry-run', 'Preview what would be backed up without downloading')
   .option('--skip-media', 'Skip downloading media files (images, videos)')
   .option('--ids <ids...>', 'Specific conversation IDs to backup')
+  .option('--only-new', 'Only download conversations not yet in local archive')
+  .option('--random-delay', 'Add random 1-30s delay between fetches (recommended for Gemini)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--schedule-id <id>', 'Internal: schedule ID for tracking (used by scheduler)')
   .action(async (provider, options) => {
@@ -74,6 +76,8 @@ program
       dryRun: options.dryRun,
       skipMedia: options.skipMedia,
       conversationIds: options.ids,
+      onlyNew: options.onlyNew,
+      randomDelay: options.randomDelay,
       yes: options.yes,
       scheduleId: options.scheduleId,
     });
