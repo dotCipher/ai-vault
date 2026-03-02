@@ -13,6 +13,7 @@ import type { ProviderConfig, Conversation, Message } from '../../types/index.js
 import type { ListConversationsOptions, ConversationSummary } from '../../types/provider.js';
 import { AuthenticationError, NotFoundError } from '../../types/provider.js';
 import { BrowserScraper } from '../../utils/scraper.js';
+import chalk from 'chalk';
 
 export class GeminiProvider extends BaseProvider {
   readonly name = 'gemini' as const;
@@ -298,8 +299,16 @@ export class GeminiProvider extends BaseProvider {
       }
 
       // 2. Regular conversations with cursor pagination (category flag [0,null,1])
+      const MAX_PAGES = 200;
       let cursor: string | null = null;
+      let pageCount = 0;
       while (true) {
+        if (++pageCount > MAX_PAGES) {
+          console.log(
+            chalk.yellow(`\n⚠ Gemini: reached ${MAX_PAGES} pagination pages, stopping.`)
+          );
+          break;
+        }
         const innerArg =
           cursor === null
             ? JSON.stringify([13, null, [0, null, 1]])
@@ -370,8 +379,8 @@ export class GeminiProvider extends BaseProvider {
         { state: 'attached', timeout: 15000 }
       );
 
-      // Extract messages and title
-      const { messages: rawMessages, title: rawTitle } = await page.evaluate(
+      // Extract messages and title (with timeout to prevent hanging on problematic pages)
+      const evalPromise = page.evaluate(
         ({ convId }: { convId: string }) => {
           // Collect all turn elements in document order, tagged by role
           const allPairs: Array<{ el: Element; role: 'user' | 'assistant' }> = [
@@ -393,16 +402,38 @@ export class GeminiProvider extends BaseProvider {
             .filter(Boolean) as Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
 
           // Extract title: prefer <title> tag minus " - Gemini" suffix, then h1
+          const isGenericTitle = (t: string) =>
+            /^(Google\s+)?Gemini$/i.test(t) || /^Chats$/i.test(t);
+
           let title = document.title?.replace(/\s*[-|]\s*Gemini\s*$/, '').trim() || '';
+          if (isGenericTitle(title)) title = '';
           if (!title) {
-            title =
-              document.querySelector('h1')?.textContent?.trim() || `Gemini conversation ${convId}`;
+            title = document.querySelector('h1')?.textContent?.trim() || '';
+          }
+          if (!title || isGenericTitle(title)) {
+            title = `Gemini conversation ${convId}`;
           }
 
           return { messages, title };
         },
         { convId: id }
       );
+      let evalTimeoutHandle: ReturnType<typeof setTimeout>;
+      const evalTimeout = new Promise<never>((_, reject) => {
+        evalTimeoutHandle = setTimeout(
+          () => reject(new Error(`Timeout extracting messages from conversation ${id}`)),
+          30_000
+        );
+      });
+      let rawMessages: any, rawTitle: any;
+      try {
+        ({ messages: rawMessages, title: rawTitle } = await Promise.race([
+          evalPromise,
+          evalTimeout,
+        ]));
+      } finally {
+        clearTimeout(evalTimeoutHandle!);
+      }
 
       const messages: Message[] = (
         rawMessages as Array<{ id: string; role: 'user' | 'assistant'; content: string }>

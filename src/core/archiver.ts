@@ -247,6 +247,14 @@ export class Archiver {
             // Check if already exists and if it needs updating (smart diff)
             const exists = await this.storage.conversationExists(provider.name, summary.id);
 
+            if (exists && options.onlyNew) {
+              completed++;
+              console.log(
+                chalk.gray(`[${completed}/${total}] Skipped: ${summary.title} (already downloaded)`)
+              );
+              return { status: 'skipped' as const, summary };
+            }
+
             if (exists && options.skipExisting) {
               // Get local conversation to compare timestamps
               const localConv = await this.storage.getConversation(provider.name, summary.id);
@@ -269,6 +277,15 @@ export class Archiver {
                   chalk.yellow(`${progress} Re-archiving: ${summary.title} (updated remotely)`)
                 );
               }
+            }
+
+            // Random delay between fetches to avoid bot detection
+            if (options.randomDelay && index > 0) {
+              const delay = Math.floor(Math.random() * 29_000) + 1_000; // 1–30s
+              console.log(
+                chalk.gray(`${progress} Waiting ${(delay / 1000).toFixed(1)}s before next fetch...`)
+              );
+              await new Promise((resolve) => setTimeout(resolve, delay));
             }
 
             // Fetch full conversation with retry logic for timeouts
@@ -306,6 +323,11 @@ export class Archiver {
             }
 
             fetchSpinner.stop(); // Stop silently - final "Archived" message will confirm success
+
+            // Prefer the title from listConversations (API-based, more reliable than DOM scraping)
+            if (summary.title && summary.title !== 'Untitled') {
+              conversation.title = summary.title;
+            }
 
             // Record successful operation
             rateLimiter.recordSuccess();

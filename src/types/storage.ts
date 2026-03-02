@@ -37,6 +37,12 @@ export interface ArchiveOptions {
   /** Skip already archived conversations */
   skipExisting?: boolean;
 
+  /** Only download conversations not yet in local archive */
+  onlyNew?: boolean;
+
+  /** Add a random delay (1–30s) between fetching each conversation */
+  randomDelay?: boolean;
+
   /** Dry run (don't actually save anything) */
   dryRun?: boolean;
 
