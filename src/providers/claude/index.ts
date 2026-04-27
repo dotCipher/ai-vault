@@ -254,19 +254,65 @@ export class ClaudeProvider extends BaseProvider {
         }
       }
 
+      // Enrich DOM-scraped results with API metadata (project assignment, summaries, timestamps).
+      // The API caps at 100 results but has correct metadata for the most recent conversations.
+      // Wrapped in try/catch so the pagination fix works even if this secondary call fails.
+      const metadataMap = new Map<
+        string,
+        {
+          projectUuid?: string;
+          summary?: string;
+          createdAt?: Date;
+          updatedAt?: Date;
+        }
+      >();
+      try {
+        const apiUrl = `https://claude.ai/api/organizations/${this.organizationId}/chat_conversations?limit=100`;
+        const apiItems: any[] = await page.evaluate(
+          async ({ url }: { url: string }) => {
+            const res = await fetch(url, { method: 'GET', credentials: 'include' });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (Array.isArray(data) ? data : []).map((c: any) => ({
+              uuid: c.uuid,
+              project_uuid: c.project_uuid || null,
+              summary: c.summary || null,
+              created_at: c.created_at || null,
+              updated_at: c.updated_at || null,
+            }));
+          },
+          { url: apiUrl }
+        );
+        for (const item of apiItems) {
+          metadataMap.set(item.uuid, {
+            projectUuid: item.project_uuid ?? undefined,
+            summary: item.summary ?? undefined,
+            createdAt: item.created_at ? new Date(item.created_at) : undefined,
+            updatedAt: item.updated_at ? new Date(item.updated_at) : undefined,
+          });
+          // Populate project mapping for use in fetchConversation
+          if (item.project_uuid && this.projects.has(item.project_uuid)) {
+            this.conversationProjects.set(item.uuid, this.projects.get(item.project_uuid)!.name);
+          }
+        }
+      } catch {
+        // Best-effort: DOM data is a sufficient fallback
+      }
+
       // Transform to ConversationSummary format
       let summaries: ConversationSummary[] = (
         rawConversations as Array<{ uuid: string; title: string; dateStr: string }>
       ).map(({ uuid, title, dateStr }) => {
-        const date = dateStr ? new Date(dateStr) : new Date();
+        const meta = metadataMap.get(uuid);
+        const domDate = dateStr ? new Date(dateStr) : new Date();
         return {
           id: uuid,
           title,
           messageCount: 0, // Filled in when fetching full conversation
-          createdAt: date,
-          updatedAt: date,
+          createdAt: meta?.createdAt ?? domDate,
+          updatedAt: meta?.updatedAt ?? domDate,
           hasMedia: false, // Filled in when fetching full conversation
-          preview: undefined, // Not available from DOM listing
+          preview: meta?.summary,
         };
       });
 
