@@ -28,6 +28,8 @@ export class GeminiProvider extends BaseProvider {
   private cachedPage?: any;
   // Semaphore set when Google's sorry/CAPTCHA page is detected; expires after 60 minutes
   private captchaBlockedUntil: Date | null = null;
+  // Timestamps from listConversations, used by fetchConversation to avoid new Date() fallback
+  private conversationTimestamps: Map<string, { createdAt: Date; updatedAt: Date }> = new Map();
 
   /** Throws immediately if the CAPTCHA cooldown semaphore is still active. */
   private checkCaptchaBlock(): void {
@@ -326,7 +328,18 @@ export class GeminiProvider extends BaseProvider {
         cursor = nextCursor;
       }
 
-      let summaries = allSummaries;
+      // Deduplicate: pinned conversations can also appear in the regular list
+      const dedupedMap = new Map<string, ConversationSummary>();
+      for (const s of allSummaries) {
+        if (!dedupedMap.has(s.id)) dedupedMap.set(s.id, s);
+      }
+
+      // Cache timestamps for use in fetchConversation
+      for (const s of dedupedMap.values()) {
+        this.conversationTimestamps.set(s.id, { createdAt: s.createdAt, updatedAt: s.updatedAt });
+      }
+
+      let summaries = Array.from(dedupedMap.values());
       if (options.since) summaries = summaries.filter((c) => c.updatedAt >= options.since!);
       if (options.until) summaries = summaries.filter((c) => c.updatedAt <= options.until!);
       if (options.limit) summaries = summaries.slice(0, options.limit);
@@ -435,13 +448,25 @@ export class GeminiProvider extends BaseProvider {
         clearTimeout(evalTimeoutHandle!);
       }
 
+      // Use timestamps from listConversations if available; fall back to now only as last resort
+      const cachedTs = this.conversationTimestamps.get(id);
+      const createdAt = cachedTs?.createdAt ?? new Date();
+      const updatedAt = cachedTs?.updatedAt ?? new Date();
+
       const messages: Message[] = (
         rawMessages as Array<{ id: string; role: 'user' | 'assistant'; content: string }>
-      ).map((m) => ({
+      ).map((m, i) => ({
         id: m.id,
         role: m.role,
         content: m.content,
-        timestamp: new Date(),
+        // Spread message timestamps evenly across the conversation window if we have real dates
+        timestamp: cachedTs
+          ? new Date(
+              createdAt.getTime() +
+                (i / Math.max(rawMessages.length - 1, 1)) *
+                  (updatedAt.getTime() - createdAt.getTime())
+            )
+          : new Date(),
       }));
 
       return {
@@ -449,8 +474,8 @@ export class GeminiProvider extends BaseProvider {
         provider: this.name,
         title: rawTitle || `Gemini conversation ${id}`,
         messages,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt,
+        updatedAt,
         metadata: {
           messageCount: messages.length,
           characterCount: messages.reduce((sum, m) => sum + m.content.length, 0),
