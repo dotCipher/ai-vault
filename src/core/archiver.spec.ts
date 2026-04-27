@@ -77,6 +77,8 @@ describe('Archiver', () => {
       }),
       enableBatchMode: vi.fn(),
       disableBatchMode: vi.fn().mockResolvedValue(undefined),
+      getPendingUpdateCount: vi.fn().mockReturnValue(0),
+      flushPendingUpdates: vi.fn().mockResolvedValue(undefined),
     };
 
     // Mock MediaManager

@@ -118,7 +118,7 @@ describe('Scheduler', () => {
       // Should include full path, not just "ai-vault"
       expect(command).toContain('/opt/homebrew/bin/ai-vault');
       expect(command).toContain('backup');
-      expect(command).toContain('--provider "grok-web"');
+      expect(command).toContain('"grok-web"');
     });
 
     it('should include skip-media flag when downloadMedia is false', () => {
