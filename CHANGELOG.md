@@ -1,18 +1,3 @@
-# [3.5.0](https://github.com/dotCipher/ai-vault/compare/v3.4.0...v3.5.0) (2026-04-28)
-
-### Bug Fixes
-
-- **claude:** replace broken API pagination with /recents DOM scraping ([ceb104a](https://github.com/dotCipher/ai-vault/commit/ceb104aca0716eb7c45b4f42db8e32a66dec2330))
-- **claude:** restore project mapping and preview after DOM pagination fix ([9fb05ff](https://github.com/dotCipher/ai-vault/commit/9fb05ff9e2880120dae1a836e9cb84d7e04b3c84))
-- **gemini:** deduplicate conversations and use real timestamps ([ab11baa](https://github.com/dotCipher/ai-vault/commit/ab11baa69842503d5d0c433099f5695d83b034f0))
-
-### Features
-
-- add --only-new and --random-delay flags for backup command ([3de03a9](https://github.com/dotCipher/ai-vault/commit/3de03a91cc0020bbee754b5af076d7953bf0b717))
-- add Gemini provider with batchexecute API and CAPTCHA semaphore ([d55085a](https://github.com/dotCipher/ai-vault/commit/d55085adf27b5a100ea17635ba9448ba1439b396))
-- **claude:** fix pagination + restore project mapping and preview ([#25](https://github.com/dotCipher/ai-vault/issues/25)) ([38c8060](https://github.com/dotCipher/ai-vault/commit/38c8060ce676839c1074db2c191935aea6d898ea))
-- **gemini:** add Gemini provider with --only-new and --random-delay ([#26](https://github.com/dotCipher/ai-vault/issues/26)) ([03729e9](https://github.com/dotCipher/ai-vault/commit/03729e953a33050a522d4ba6a74c62791ab26a73))
-
 # [3.4.0](https://github.com/dotCipher/ai-vault/compare/v3.3.0...v3.4.0) (2026-02-08)
 
 ### Bug Fixes
