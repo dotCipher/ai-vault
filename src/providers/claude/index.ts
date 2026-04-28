@@ -151,56 +151,6 @@ export class ClaudeProvider extends BaseProvider {
   }
 
   /**
-   * Fetch a single page of conversations from the API
-   * Returns minimal data to avoid string overflow in page.evaluate()
-   */
-  private async fetchConversationPage(
-    page: any,
-    pageNum: number,
-    limit: number
-  ): Promise<{ items: any[]; hasMore: boolean }> {
-    const url = `https://claude.ai/api/organizations/${this.organizationId}/chat_conversations?limit=${limit}&page=${pageNum}`;
-
-    const result = await page.evaluate(
-      async ({ url }: { url: string }) => {
-        const res = await fetch(url, {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (!res.ok) {
-          return { items: [], hasMore: false, error: res.status };
-        }
-
-        const data = await res.json();
-        const conversations = Array.isArray(data) ? data : [];
-
-        // Return only minimal fields to avoid large data transfer
-        const minimalItems = conversations.map((conv: any) => ({
-          uuid: conv.uuid,
-          name: conv.name || 'Untitled',
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
-          summary: conv.summary,
-          project_uuid: conv.project_uuid,
-        }));
-
-        return {
-          items: minimalItems,
-          hasMore: conversations.length === 100, // API limit
-        };
-      },
-      { url }
-    );
-
-    if (result.error && pageNum === 1) {
-      throw new Error(`API request failed: ${result.error}`);
-    }
-
-    return result;
-  }
-
-  /**
    * Fetch projects for the organization
    */
   private async fetchProjects(page: any): Promise<any[]> {
@@ -225,8 +175,10 @@ export class ClaudeProvider extends BaseProvider {
   }
 
   /**
-   * List conversations from Claude API with pagination
-   * Pagination is done outside page.evaluate() to avoid string overflow
+   * List all conversations by scraping the /recents page.
+   * Clicks "Show more" / "Load more" until the button disappears,
+   * then extracts conversation links from the DOM.
+   * This overcomes the API pagination bug that caps results at 100.
    */
   async listConversations(options: ListConversationsOptions = {}): Promise<ConversationSummary[]> {
     this.requireAuth();
@@ -238,40 +190,61 @@ export class ClaudeProvider extends BaseProvider {
     const page = await this.getOrCreatePage();
 
     try {
-      const pageSize = 100; // API limit per request
-      const requestedLimit = options.limit;
+      // Navigate to the recents page to get the full conversation list
+      await page.goto('https://claude.ai/recents', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
 
-      // Fetch conversations with pagination outside browser context
-      // Track seen UUIDs to detect when API returns duplicates (pagination cycling)
-      const allConversations: any[] = [];
-      const seenUuids = new Set<string>();
-      let pageNum = 1;
-      let hasMore = true;
+      // Wait for at least one conversation link to appear
+      await page.waitForSelector('a[href*="/chat/"]', { timeout: 15000 });
 
-      while (hasMore) {
-        const result = await this.fetchConversationPage(page, pageNum, pageSize);
+      // Click "Show more" / "Load more" until no more conversations remain.
+      // The button is often temporarily disabled while the page loads — poll until
+      // it becomes enabled (ready), disappears (all loaded), or stays disabled
+      // for 10s (treat as end-of-list).
+      while (true) {
+        const buttonState = await page
+          .waitForFunction(
+            () => {
+              const allBtns = Array.from(document.querySelectorAll('button'));
+              const showMore = allBtns.find((b) =>
+                /show more|load more/i.test(b.textContent?.trim() ?? '')
+              );
+              if (!showMore) return 'gone'; // removed from DOM → all loaded
+              if (!showMore.disabled) return 'ready'; // enabled → click it
+              return null; // still loading → keep polling
+            },
+            { timeout: 10000 }
+          )
+          .then((h: any) => h.jsonValue())
+          .catch(() => 'done');
 
-        // Check for duplicates - if we see any UUID we've already seen,
-        // the API is cycling back (pagination doesn't work as expected)
-        let foundDuplicate = false;
-        for (const item of result.items) {
-          if (seenUuids.has(item.uuid)) {
-            foundDuplicate = true;
-            break;
-          }
-          seenUuids.add(item.uuid);
-          allConversations.push(item);
-        }
+        if (buttonState !== 'ready') break;
 
-        // Stop if we found duplicates (API cycled) or no more results
-        hasMore = result.hasMore && !foundDuplicate;
-        if (requestedLimit && allConversations.length >= requestedLimit) {
-          hasMore = false;
-        }
-        pageNum++;
+        await page.getByRole('button', { name: /show more|load more/i }).click();
+        // Wait for new items to load; tolerate timeout on slow networks
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
       }
 
-      // Fetch projects
+      // Extract conversation data from DOM
+      const rawConversations = await page.evaluate(() => {
+        const seen = new Set<string>();
+        return Array.from(document.querySelectorAll('a[href*="/chat/"]'))
+          .map((a) => {
+            const href = (a as HTMLAnchorElement).href;
+            const uuid = href.split('/chat/')[1]?.split('?')[0]?.split('/')[0] || '';
+            if (!uuid || seen.has(uuid)) return null;
+            seen.add(uuid);
+            const title = a.textContent?.trim() || 'Untitled';
+            const timeEl = a.closest('li, [role="listitem"], [data-testid]')?.querySelector('time');
+            const dateStr = timeEl?.getAttribute('datetime') || '';
+            return { uuid, title, dateStr };
+          })
+          .filter(Boolean);
+      });
+
+      // Fetch projects (still via API)
       const projectsData = await this.fetchProjects(page);
 
       // Store projects for later use
@@ -281,22 +254,65 @@ export class ClaudeProvider extends BaseProvider {
         }
       }
 
-      // Transform to ConversationSummary format
-      let summaries: ConversationSummary[] = allConversations.map((conv: any) => {
-        // Map conversation to project if available
-        if (conv.project_uuid && this.projects.has(conv.project_uuid)) {
-          const project = this.projects.get(conv.project_uuid)!;
-          this.conversationProjects.set(conv.uuid, project.name);
+      // Enrich DOM-scraped results with API metadata (project assignment, summaries, timestamps).
+      // The API caps at 100 results but has correct metadata for the most recent conversations.
+      // Wrapped in try/catch so the pagination fix works even if this secondary call fails.
+      const metadataMap = new Map<
+        string,
+        {
+          projectUuid?: string;
+          summary?: string;
+          createdAt?: Date;
+          updatedAt?: Date;
         }
+      >();
+      try {
+        const apiUrl = `https://claude.ai/api/organizations/${this.organizationId}/chat_conversations?limit=100`;
+        const apiItems: any[] = await page.evaluate(
+          async ({ url }: { url: string }) => {
+            const res = await fetch(url, { method: 'GET', credentials: 'include' });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (Array.isArray(data) ? data : []).map((c: any) => ({
+              uuid: c.uuid,
+              project_uuid: c.project_uuid || null,
+              summary: c.summary || null,
+              created_at: c.created_at || null,
+              updated_at: c.updated_at || null,
+            }));
+          },
+          { url: apiUrl }
+        );
+        for (const item of apiItems) {
+          metadataMap.set(item.uuid, {
+            projectUuid: item.project_uuid ?? undefined,
+            summary: item.summary ?? undefined,
+            createdAt: item.created_at ? new Date(item.created_at) : undefined,
+            updatedAt: item.updated_at ? new Date(item.updated_at) : undefined,
+          });
+          // Populate project mapping for use in fetchConversation
+          if (item.project_uuid && this.projects.has(item.project_uuid)) {
+            this.conversationProjects.set(item.uuid, this.projects.get(item.project_uuid)!.name);
+          }
+        }
+      } catch {
+        // Best-effort: DOM data is a sufficient fallback
+      }
 
+      // Transform to ConversationSummary format
+      let summaries: ConversationSummary[] = (
+        rawConversations as Array<{ uuid: string; title: string; dateStr: string }>
+      ).map(({ uuid, title, dateStr }) => {
+        const meta = metadataMap.get(uuid);
+        const domDate = dateStr ? new Date(dateStr) : new Date();
         return {
-          id: conv.uuid,
-          title: conv.name || 'Untitled',
-          messageCount: 0, // Will be determined when fetching full conversation
-          createdAt: conv.created_at ? new Date(conv.created_at) : new Date(),
-          updatedAt: conv.updated_at ? new Date(conv.updated_at) : new Date(),
-          hasMedia: false, // Will be determined when fetching full conversation
-          preview: conv.summary, // Claude includes AI-generated summaries
+          id: uuid,
+          title,
+          messageCount: 0, // Filled in when fetching full conversation
+          createdAt: meta?.createdAt ?? domDate,
+          updatedAt: meta?.updatedAt ?? domDate,
+          hasMedia: false, // Filled in when fetching full conversation
+          preview: meta?.summary,
         };
       });
 
@@ -315,7 +331,7 @@ export class ClaudeProvider extends BaseProvider {
 
       return summaries;
     } catch (error) {
-      // Don't close the cached page on error, just invalidate it
+      // Invalidate cached page on error so next call gets a fresh one
       this.cachedPage = undefined;
       throw error;
     }
