@@ -22,6 +22,8 @@ interface ArchiveCommandOptions {
   dryRun?: boolean;
   skipMedia?: boolean;
   conversationIds?: string[];
+  onlyNew?: boolean;
+  randomDelay?: boolean;
   yes?: boolean;
   scheduleId?: string;
 }
@@ -141,6 +143,8 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
     // Set options
     archiveOptions.dryRun = options.dryRun || false;
     archiveOptions.downloadMedia = !options.skipMedia;
+    archiveOptions.onlyNew = options.onlyNew || false;
+    archiveOptions.randomDelay = options.randomDelay || false;
     archiveOptions.conversationIds = options.conversationIds;
 
     const displayArchiveDir =
@@ -161,6 +165,12 @@ export async function archiveCommand(options: ArchiveCommandOptions): Promise<vo
       ui.log.info(`  Limit: ${archiveOptions.limit} conversations`);
     }
     ui.log.info(`  Media: ${archiveOptions.downloadMedia ? 'Yes' : 'No'}`);
+    if (archiveOptions.onlyNew) {
+      ui.log.info(`  Only New: Yes (skipping previously downloaded)`);
+    }
+    if (archiveOptions.randomDelay) {
+      ui.log.info(`  Random Delay: Yes (1-30s between fetches)`);
+    }
     ui.log.info(`  Mode: ${archiveOptions.dryRun ? 'Dry Run (preview only)' : 'Live'}`);
     console.log();
 

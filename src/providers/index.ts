@@ -6,6 +6,7 @@ import { GrokWebProvider } from './grok-web/index.js';
 import { GrokXProvider } from './grok-x/index.js';
 import { ChatGPTProvider } from './chatgpt/index.js';
 import { ClaudeProvider } from './claude/index.js';
+import { GeminiProvider } from './gemini/index.js';
 import type { Provider } from '../types/provider.js';
 import type { ProviderName } from '../types/index.js';
 
@@ -15,7 +16,7 @@ export const providers: Record<string, new () => Provider> = {
   'grok-x': GrokXProvider,
   chatgpt: ChatGPTProvider,
   claude: ClaudeProvider,
-  // gemini: GeminiProvider, // Coming soon
+  gemini: GeminiProvider,
 };
 
 /**
@@ -47,4 +48,4 @@ export function isProviderAvailable(name: string): boolean {
   return name in providers;
 }
 
-export { GrokWebProvider, GrokXProvider, ChatGPTProvider, ClaudeProvider };
+export { GrokWebProvider, GrokXProvider, ChatGPTProvider, ClaudeProvider, GeminiProvider };
