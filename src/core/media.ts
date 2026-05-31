@@ -114,8 +114,8 @@ export class MediaManager {
     const cpuCount = os.cpus().length;
     let concurrency = Math.max(2, Math.min(Math.floor(cpuCount / 2), 5)); // Min 2, max 5
 
-    // Grok is very aggressive with rate limiting - use sequential downloads
-    if (conversation.provider === 'grok-web') {
+    // Some providers rate-limit authenticated media downloads aggressively - use sequential downloads.
+    if (conversation.provider === 'grok-web' || conversation.provider === 'chatgpt') {
       concurrency = 1;
     }
 
@@ -183,8 +183,13 @@ export class MediaManager {
           onProgress?.(completed, total);
 
           // Add delay between downloads for Grok to avoid rate limits
-          if (conversation.provider === 'grok-web' && completed < total) {
-            await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms delay between downloads
+          if (
+            (conversation.provider === 'grok-web' || conversation.provider === 'chatgpt') &&
+            completed < total
+          ) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, conversation.provider === 'chatgpt' ? 1000 : 500)
+            );
           }
 
           return {
@@ -601,11 +606,17 @@ export class MediaManager {
         }
 
         if (metadataResponse.status >= 400) {
-          // Provide more context for 404 errors - files may have expired
+          // Provide more context for ChatGPT file URLs that are no longer redeemable.
           if (metadataResponse.status === 404) {
             throw new Error(
               `File not found (404) - File may have expired or been deleted from ChatGPT's servers. ` +
                 `This is normal for older files as ChatGPT doesn't keep media forever.`
+            );
+          }
+          if (metadataResponse.status === 422) {
+            throw new Error(
+              `File unavailable (422) - ChatGPT rejected the file download token or the file is no longer redeemable. ` +
+                `This is common for older media and should be treated like an expired attachment.`
             );
           }
           throw new Error(`HTTP ${metadataResponse.status}: ${metadataResponse.statusText}`);
@@ -670,7 +681,7 @@ export class MediaManager {
       writer.on('finish', () => {
         if (errored) return; // Don't resolve if we already errored
         finished = true;
-        const mimeType = response.headers['content-type'] || 'application/octet-stream';
+        const mimeType = String(response.headers['content-type'] || 'application/octet-stream');
         resolve({
           hash: hash.digest('hex'),
           size,

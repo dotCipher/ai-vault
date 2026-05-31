@@ -234,6 +234,7 @@ export class Archiver {
       const archiveTasks = conversationsToArchive.map((summary, index) =>
         limit(async () => {
           const progress = `[${index + 1}/${total}]`;
+          let fetchSpinner: ReturnType<typeof ora> | null = null;
 
           // Check circuit breaker before attempting operation
           if (rateLimiter.isCircuitOpen()) {
@@ -289,7 +290,7 @@ export class Archiver {
             }
 
             // Fetch full conversation with retry logic for timeouts
-            const fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
+            fetchSpinner = ora(`${progress} Fetching: ${summary.title}`).start();
             let conversation;
             const maxRetries = 3;
             let lastError;
@@ -382,29 +383,34 @@ export class Archiver {
                 `${progress} Downloading ${conversation.metadata.mediaCount} media files...`
               ).start();
 
-              // Get authentication from provider if available (needed for authenticated media downloads)
-              const providerCookies = (provider as any).config?.cookies;
-              const providerAccessToken = (provider as any).config?.accessToken;
+              try {
+                // Get authentication from provider if available (needed for authenticated media downloads)
+                const providerCookies = (provider as any).config?.cookies;
+                const providerAccessToken = (provider as any).config?.accessToken;
 
-              mediaResult = await this.mediaManager.downloadConversationMedia(
-                conversation,
-                (current, mediaTotal) => {
-                  mediaSpinner.text = `${progress} Downloading media: ${current}/${mediaTotal}`;
-                },
-                providerCookies,
-                providerAccessToken
-              );
+                mediaResult = await this.mediaManager.downloadConversationMedia(
+                  conversation,
+                  (current, mediaTotal) => {
+                    mediaSpinner.text = `${progress} Downloading media: ${current}/${mediaTotal}`;
+                  },
+                  providerCookies,
+                  providerAccessToken
+                );
 
-              if (mediaResult.failed > 0) {
-                mediaSpinner.warn(
-                  `${progress} Downloaded ${mediaResult.downloaded}/${conversation.metadata.mediaCount} media files (${mediaResult.failed} failed)`
-                );
-              } else {
-                const skippedText =
-                  mediaResult.skipped > 0 ? ` (${mediaResult.skipped} already existed)` : '';
-                mediaSpinner.succeed(
-                  `${progress} Downloaded ${mediaResult.downloaded} media files${skippedText}`
-                );
+                if (mediaResult.failed > 0) {
+                  mediaSpinner.warn(
+                    `${progress} Downloaded ${mediaResult.downloaded}/${conversation.metadata.mediaCount} media files (${mediaResult.failed} failed)`
+                  );
+                } else {
+                  const skippedText =
+                    mediaResult.skipped > 0 ? ` (${mediaResult.skipped} already existed)` : '';
+                  mediaSpinner.succeed(
+                    `${progress} Downloaded ${mediaResult.downloaded} media files${skippedText}`
+                  );
+                }
+              } catch (error) {
+                mediaSpinner.fail(`${progress} Media download failed`);
+                throw error;
               }
             }
 
@@ -421,6 +427,7 @@ export class Archiver {
               mediaResult,
             };
           } catch (error) {
+            fetchSpinner?.stop();
             completed++;
 
             // Handle rate limit errors specially
@@ -428,9 +435,7 @@ export class Archiver {
               const { shouldPause, delay } = rateLimiter.recordRateLimit(error);
               const newConcurrency = rateLimiter.getConcurrency();
 
-              console.log(
-                chalk.yellow(`[${completed}/${total}] ⚠ Rate limited: ${summary.title}`)
-              );
+              console.log(chalk.yellow(`[${completed}/${total}] ⚠ Rate limited: ${summary.title}`));
               console.log(
                 chalk.yellow(
                   `  Reducing concurrency to ${newConcurrency}, waiting ${Math.floor(delay / 1000)}s...`
@@ -498,7 +503,11 @@ export class Archiver {
             // Add media errors
             for (const error of taskResult.mediaResult.errors) {
               // Use yellow for 404 (expected expiration), red for other errors
-              const isExpired = error.error.includes('404') || error.error.includes('expired');
+              const isExpired =
+                error.error.includes('404') ||
+                error.error.includes('422') ||
+                error.error.includes('Unprocessable Entity') ||
+                error.error.includes('expired');
               const color = isExpired ? chalk.yellow : chalk.red;
               const prefix = isExpired ? '⚠ Media file expired' : '✗ Media download failed';
 
