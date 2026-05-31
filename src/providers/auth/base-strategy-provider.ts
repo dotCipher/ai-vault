@@ -151,7 +151,7 @@ export abstract class StrategyBasedProvider implements Provider {
       response.data.pipe(writer);
 
       writer.on('finish', () => {
-        const mimeType = response.headers['content-type'] || 'application/octet-stream';
+        const mimeType = String(response.headers['content-type'] || 'application/octet-stream');
         resolve({
           path: outputPath,
           size,

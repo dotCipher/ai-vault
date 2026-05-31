@@ -229,6 +229,63 @@ describe('ChatGPTProvider', () => {
       expect(conversations[0].updatedAt).toBeInstanceOf(Date);
     });
 
+    it('should stop paginating when ChatGPT starts repeating the same page', async () => {
+      const repeatedPage = [
+        {
+          id: 'conv-1',
+          title: 'Test Conversation',
+          create_time: 1704067200,
+          update_time: 1704110400,
+        },
+        {
+          id: 'conv-2',
+          title: 'Another Chat',
+          create_time: 1704153600,
+          update_time: 1704196800,
+        },
+      ];
+
+      const mockPage = {
+        goto: vi.fn().mockResolvedValue(undefined),
+        url: vi.fn().mockReturnValue('https://chatgpt.com'),
+        waitForSelector: vi.fn().mockResolvedValue(undefined),
+        evaluate: vi
+          .fn()
+          .mockResolvedValueOnce({
+            accessToken: 'test-token',
+            sessionData: { expires: '2026-01-01T00:00:00Z' },
+          })
+          .mockResolvedValueOnce({
+            items: repeatedPage,
+            hasMore: true,
+          })
+          .mockResolvedValueOnce({
+            items: repeatedPage,
+            hasMore: true,
+          })
+          .mockResolvedValueOnce({
+            items: [],
+            hasMore: false,
+          })
+          .mockResolvedValueOnce(null),
+        waitForTimeout: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+
+      mockBrowserScraper(mockPage);
+
+      await provider.authenticate({
+        providerName: 'chatgpt',
+        authMethod: 'cookies',
+        cookies: { '__Secure-next-auth': 'test' },
+      });
+
+      const conversations = await provider.listConversations();
+
+      expect(conversations).toHaveLength(2);
+      expect(conversations.map((conv) => conv.id)).toEqual(['conv-1', 'conv-2']);
+    });
+
     it('should filter conversations by since date', async () => {
       // Use ChatGPT API format with Unix timestamps
       const mockConversations = [

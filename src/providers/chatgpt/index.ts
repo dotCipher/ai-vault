@@ -185,7 +185,9 @@ export class ChatGPTProvider extends BaseProvider {
 
         return {
           items: minimalItems,
-          hasMore: items.length === limit && data.has_missing_conversations !== false,
+          // ChatGPT sometimes reports has_missing_conversations=false even when older pages still exist.
+          // Keep paginating while the page is full; the caller guards against duplicate pages.
+          hasMore: items.length === limit,
         };
       },
       { offset, limit, isArchived, token: accessToken }
@@ -294,12 +296,20 @@ export class ChatGPTProvider extends BaseProvider {
 
       // Fetch regular conversations with pagination outside browser context
       const regularConversations: any[] = [];
+      const seenRegularIds = new Set<string>();
       let offset = 0;
       let hasMore = true;
 
       while (hasMore) {
         const result = await this.fetchConversationPage(page, accessToken, offset, pageSize, false);
-        regularConversations.push(...result.items);
+        const newItems = result.items.filter((item: any) => !seenRegularIds.has(item.id));
+        for (const item of newItems) {
+          seenRegularIds.add(item.id);
+        }
+        regularConversations.push(...newItems);
+        if (newItems.length === 0) {
+          break;
+        }
 
         hasMore = result.hasMore;
         if (requestedLimit && regularConversations.length >= requestedLimit) {
@@ -310,12 +320,20 @@ export class ChatGPTProvider extends BaseProvider {
 
       // Fetch archived conversations with pagination outside browser context
       const archivedConversations: any[] = [];
+      const seenArchivedIds = new Set<string>();
       offset = 0;
       hasMore = true;
 
       while (hasMore) {
         const result = await this.fetchConversationPage(page, accessToken, offset, pageSize, true);
-        archivedConversations.push(...result.items);
+        const newItems = result.items.filter((item: any) => !seenArchivedIds.has(item.id));
+        for (const item of newItems) {
+          seenArchivedIds.add(item.id);
+        }
+        archivedConversations.push(...newItems);
+        if (newItems.length === 0) {
+          break;
+        }
 
         hasMore = result.hasMore;
         if (

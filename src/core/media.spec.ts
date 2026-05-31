@@ -192,6 +192,40 @@ describe('MediaManager', () => {
       expect(result.errors[0].error).toBe('Network error');
     });
 
+    it('should classify ChatGPT 422 media links as expired-style failures', async () => {
+      const conversation = createMockConversation({
+        provider: 'chatgpt',
+        messages: [
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            content: 'File',
+            timestamp: new Date('2025-01-01'),
+            attachments: [
+              {
+                id: 'att-1',
+                type: 'image',
+                url: 'https://chatgpt.com/backend-api/files/download/file-123?conversation_id=conv-123&inline=false',
+              },
+            ],
+          },
+        ],
+      });
+
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        data: {},
+        headers: {},
+        status: 422,
+        statusText: 'Unprocessable Entity',
+        config: {} as any,
+      });
+
+      const result = await mediaManager.downloadConversationMedia(conversation);
+
+      expect(result.failed).toBe(1);
+      expect(result.errors[0].error).toContain('File unavailable (422)');
+    });
+
     it('should collect errors but continue downloading', async () => {
       const conversation = createMockConversation({
         messages: [

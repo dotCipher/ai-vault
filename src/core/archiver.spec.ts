@@ -21,6 +21,7 @@ describe('Archiver', () => {
   let mockStorage: any;
   let mockMediaManager: any;
   let mockProvider: Provider;
+  let mockOraSpinner: any;
 
   const createMockSummary = (id: string): ConversationSummary => ({
     id,
@@ -128,7 +129,7 @@ describe('Archiver', () => {
     archiver = new Archiver(mockStorage as Storage, mockMediaManager as MediaManager);
 
     // Mock ora spinner
-    const mockSpinner = {
+    mockOraSpinner = {
       start: vi.fn().mockReturnThis(),
       succeed: vi.fn().mockReturnThis(),
       warn: vi.fn().mockReturnThis(),
@@ -136,7 +137,7 @@ describe('Archiver', () => {
       stop: vi.fn().mockReturnThis(),
       text: '',
     };
-    vi.mocked(ora).mockReturnValue(mockSpinner as any);
+    vi.mocked(ora).mockReturnValue(mockOraSpinner as any);
 
     // Mock console.log to avoid cluttering test output
     vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -160,6 +161,29 @@ describe('Archiver', () => {
       expect(result.conversationsArchived).toBe(3);
       expect(result.conversationsSkipped).toBe(0);
       expect(result.errors).toHaveLength(0);
+    });
+
+    it('should stop the fetch spinner when fetchConversation fails', async () => {
+      (mockProvider.listConversations as any).mockResolvedValue([createMockSummary('conv-1')]);
+      (mockProvider.fetchConversation as any).mockRejectedValue(new Error('Boom'));
+
+      const fetchSpinner = {
+        start: vi.fn().mockReturnThis(),
+        succeed: vi.fn().mockReturnThis(),
+        warn: vi.fn().mockReturnThis(),
+        fail: vi.fn().mockReturnThis(),
+        stop: vi.fn().mockReturnThis(),
+        text: '',
+      };
+
+      vi.mocked(ora)
+        .mockReturnValueOnce(mockOraSpinner as any)
+        .mockReturnValueOnce(fetchSpinner as any);
+
+      const result = await archiver.archive(mockProvider, { provider: 'test-provider' });
+
+      expect(result.errors).toHaveLength(1);
+      expect(fetchSpinner.stop).toHaveBeenCalled();
     });
 
     it('should respect date filters', async () => {
